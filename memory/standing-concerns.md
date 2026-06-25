@@ -23,9 +23,10 @@ concerns:
       window: "90d"
       min_signal: "1 real exchange"
 
+  # Overlaps dropped-followups; enable once you track explicit promises.
   - id: open-promises
     playbook: account-followup-recovery
-    enabled: true
+    enabled: false
     params:
       account: "*"
       staleness: "3d"

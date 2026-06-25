@@ -1,5 +1,16 @@
 # Daily Use
 
+Every step has two equivalent paths: the slash command (model-driven, connector
+aware) and the engine command (deterministic, offline). Use whichever fits.
+
+| Task | Slash command | Engine command |
+| --- | --- | --- |
+| Morning brief | `/ernest-brief` | `ernest brief` |
+| Ambient watch | `/ernest-watch` | `ernest watch` |
+| Draft replies | `/ernest-draft` or `draft these` | `ernest draft --concern <id>` |
+| Add automation | `/ernest-new-automation` | `ernest new-automation --id <id> --playbook <p>` |
+| Weekly learning | `/ernest-learn` | `ernest learn` |
+
 ## Morning
 
 Run:

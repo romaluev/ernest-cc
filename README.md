@@ -14,6 +14,23 @@ three working automations out of the box:
 The CEO should not edit JSON, cron files, or connector config manually. Use
 `install.sh` or `install.ps1`, then authorize accounts when prompted.
 
+## Verify it works in 30 seconds
+
+A standard-library engine backs the core flow, so it runs with no model and no
+connectors:
+
+```bash
+./install.sh
+~/.ernest-cc/bin/ernest doctor
+~/.ernest-cc/bin/ernest onboard --non-interactive --company "UnicornCo"
+~/.ernest-cc/bin/ernest watch && ~/.ernest-cc/bin/ernest brief
+~/.ernest-cc/bin/ernest draft --concern dropped-followups
+```
+
+This produces real watch cards, a morning brief, and labeled draft-only
+outreach from the sample data in `data/`. The Claude Code skills and slash
+commands are the natural-language layer on top of these same commands.
+
 ## Modes
 
 - **Local-only**: default. Uses local memory, exported data under `data/**`,

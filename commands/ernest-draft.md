@@ -24,3 +24,7 @@ Rules:
 - Never update CRM stages.
 - Never create calendar invites.
 - Include facts used, uncertainties, and approval checklist.
+
+Deterministic baseline: `ernest draft --concern <id>` (or `--contact <name>`)
+writes labeled draft-only outreach to `00-Drafts/`. It never sends; approving a
+send is a separate human step through a connector.

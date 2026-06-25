@@ -17,3 +17,7 @@ Rules:
 - Never auto-adopt new skills, credentials, sends, or permission expansion.
 - Include rollback and dry-run.
 - If no high-confidence improvement exists, return `[SILENT]`.
+
+Deterministic baseline: `ernest learn` aggregates `logs/learning-proposals.jsonl`
+into `logs/learning-summary.md`, all marked `status: proposed` and requiring CEO
+approval. `ernest learn --note "..."` adds an observation by hand.

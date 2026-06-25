@@ -11,4 +11,5 @@ Rules:
 - No external writes.
 - Return `[SILENT]` if nothing needs attention.
 
-Prefer the VPS brain tools when available.
+Prefer the VPS brain tools when available. With no connectors, run `ernest brief`
+for a deterministic brief from local data, then enrich it.

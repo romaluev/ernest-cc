@@ -10,9 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-from gate import evaluate, load_scope
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from ernest.gate import evaluate, load_scope  # noqa: E402
 
 
 def _read_payload() -> Dict[str, Any]:

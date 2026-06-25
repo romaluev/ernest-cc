@@ -9,10 +9,22 @@ Ernest should take the CEO from install to first useful card without editing con
 ```
 
 This works without the Ernest VPS. The installer creates a local vault, local
-memory, and local exported-data folders. If live local MCP connectors are not
-configured yet, Ernest can still run dry-runs and demos from `data/`.
+memory, local exported-data folders, and an `ernest` CLI launcher.
 
-Then:
+### Verify in 30 seconds (no model, no connectors)
+
+```bash
+~/.ernest-cc/bin/ernest doctor
+~/.ernest-cc/bin/ernest onboard            # add --non-interactive --company "..." to script it
+~/.ernest-cc/bin/ernest watch
+~/.ernest-cc/bin/ernest brief
+~/.ernest-cc/bin/ernest draft --concern dropped-followups
+```
+
+You should see watch cards in `00-Watch/`, a brief in `00-Daily/`, and labeled
+draft-only outreach in `00-Drafts/`. Nothing is ever sent.
+
+Then, for the full assistant experience:
 
 1. Sign in to Claude Code or Claude Desktop.
 2. Start Claude Code in `~/.ernest-cc`.

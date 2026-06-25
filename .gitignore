@@ -5,8 +5,8 @@
 *token*
 __pycache__/
 *.pyc
-logs/*.log
-logs/*.jsonl
+logs/
+vault/
 .DS_Store
 ErnestVault/
 .ernest-cc/

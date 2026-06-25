@@ -2,6 +2,9 @@
 
 Run Ernest's first-use onboarding.
 
+Fast path: run `ernest doctor` to confirm health, then `ernest onboard` to seed
+memory non-interactively. The steps below cover the guided, connector-aware flow.
+
 1. Explain in one paragraph: Ernest extends the CEO on inbox, follow-ups, CRM, calendar, and ops work; everything external is draft-first.
 2. Check mode:
    - VPS brain: call `mcp__ernest-brain__health` if available.

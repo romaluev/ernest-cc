@@ -11,3 +11,6 @@ Rules:
 - Never draft external content.
 - Never mutate live systems.
 - Return `[SILENT]` when clean.
+
+Deterministic baseline: `ernest watch` evaluates all enabled concerns and writes
+cards to `00-Watch/` with no model required.

@@ -25,6 +25,8 @@ function Health-Check {
   Require-File "ernest.yaml"
   Require-File "hooks/pre_tool_use.py"
   Require-File "hooks/capture_learnings.py"
+  Require-File "ernest/cli.py"
+  Require-File "ernest/gate.py"
   Require-File "skills/morning-brief/SKILL.md"
   Require-File "skills/account-followup-recovery/SKILL.md"
   Require-File "skills/inbox-prospect-followup/SKILL.md"
@@ -35,8 +37,8 @@ function Health-Check {
 Health-Check
 if ($HealthOnly) { exit 0 }
 
-New-Item -ItemType Directory -Force -Path $ProfileDir, $VaultDir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $VaultDir "Ernest/00-Watch"), (Join-Path $VaultDir "Ernest/00-Daily") | Out-Null
+New-Item -ItemType Directory -Force -Path $ProfileDir, $VaultDir, (Join-Path $ProfileDir "bin") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $VaultDir "Ernest/00-Watch"), (Join-Path $VaultDir "Ernest/00-Daily"), (Join-Path $VaultDir "Ernest/00-Drafts") | Out-Null
 if (!(Test-Path $MemoryFile)) { "{}" | Set-Content -Encoding UTF8 $MemoryFile }
 
 Copy-Item -Force (Join-Path $Root "CLAUDE.md") $ProfileDir
@@ -48,6 +50,14 @@ Copy-Item -Recurse -Force (Join-Path $Root "agents") $ProfileDir
 Copy-Item -Recurse -Force (Join-Path $Root "hooks") $ProfileDir
 Copy-Item -Recurse -Force (Join-Path $Root "memory") $ProfileDir
 Copy-Item -Recurse -Force (Join-Path $Root "data") $ProfileDir
+Copy-Item -Recurse -Force (Join-Path $Root "ernest") $ProfileDir
+
+@"
+@echo off
+set ERNEST_PROFILE_DIR=$ProfileDir
+set PYTHONPATH=$ProfileDir;%PYTHONPATH%
+python -m ernest.cli %*
+"@ | Set-Content -Encoding ASCII (Join-Path $ProfileDir "bin/ernest.cmd")
 
 if ($Mode -eq "vps" -and (!$env:ERNEST_BRAIN_URL -or !$env:ERNEST_BRAIN_TOKEN)) {
   Write-Output "VPS mode selected. Set ERNEST_BRAIN_URL and ERNEST_BRAIN_TOKEN, then rerun install.ps1."
@@ -102,4 +112,5 @@ Write-Output "Ernest installed to $ProfileDir"
 Write-Output "Mode: $Mode"
 Write-Output "Vault: $VaultDir"
 Write-Output ""
-Write-Output "Next: authorize Gmail/HubSpot/Slack/Calendar, then run /ernest-onboard."
+Write-Output "Verify now: $ProfileDir\bin\ernest.cmd doctor"
+Write-Output "Then authorize Gmail/HubSpot/Slack/Calendar and run /ernest-onboard in Claude Code."

@@ -41,6 +41,10 @@ If the VPS brain is not configured, use local MCP connectors. If local connector
 are not configured, read exported files under `data/mail`, `data/hubspot`, and
 `data/calendar`. Label those outputs `source: local-export`.
 
+Deterministic baseline: `ernest brief` composes this exact brief from the same
+source order with no model required. Run it directly for the offline/headless
+path, or read its output and enrich it with live reasoning when connectors exist.
+
 ## Output Format
 
 ```markdown

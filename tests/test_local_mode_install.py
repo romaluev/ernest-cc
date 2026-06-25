@@ -49,6 +49,27 @@ def main() -> int:
         failures.append("local data fallback not installed")
     if not (profile / "data" / "mail" / "sample-thread.md").exists():
         failures.append("local mail sample not installed")
+    if not (profile / "ernest" / "cli.py").exists():
+        failures.append("engine not installed into profile")
+
+    launcher = profile / "bin" / "ernest"
+    if not launcher.exists():
+        failures.append("ernest launcher not installed")
+    else:
+        run_env = os.environ.copy()
+        run_env.update({
+            "ERNEST_PROFILE_DIR": str(profile),
+            "ERNEST_LOCAL_VAULT": str(vault),
+            "ERNEST_TODAY": "2026-06-25",
+        })
+        for sub in ("doctor", "watch", "brief"):
+            res = subprocess.run(["bash", str(launcher), sub], text=True,
+                                 capture_output=True, env=run_env, check=False)
+            if res.returncode != 0:
+                failures.append(f"installed launcher '{sub}' failed: {res.stderr}")
+        brief_dir = vault / "Ernest" / "00-Daily"
+        if not (brief_dir.exists() and list(brief_dir.glob("*.md"))):
+            failures.append("installed launcher did not produce a brief")
 
     if failures:
         print("FAILED local-mode install:")
