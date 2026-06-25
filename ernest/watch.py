@@ -53,12 +53,16 @@ def _company_tier_map(cfg: Config) -> Dict[str, str]:
 
 def _account_followup(concern: Concern, threads: List[Thread], cfg: Config) -> List[WatchItem]:
     staleness = _days_param(concern.params.get("staleness", ""), 7)
+    window = _days_param(concern.params.get("window", ""), 0)
     account = concern.params.get("account", "*").strip()
     tiers = {t.lower() for t in _csv_list(concern.params.get("priority_tiers", ""))}
     tier_map = _company_tier_map(cfg) if tiers else {}
     items: List[WatchItem] = []
     for t in threads:
-        if not (t.owed and t.days_waiting(cfg.today) >= staleness):
+        waiting = t.days_waiting(cfg.today)
+        if not (t.owed and waiting >= staleness):
+            continue
+        if window and waiting > window:
             continue
         if account not in ("", "*") and account.lower() not in (t.company + " " + t.contact).lower():
             continue
@@ -67,9 +71,9 @@ def _account_followup(concern: Concern, threads: List[Thread], cfg: Config) -> L
         scope = "important " if tiers else ""
         items.append(WatchItem(
             concern.id, f"{t.contact or 'Unknown'} - {t.company or 'Unknown'}",
-            f"Inbound {t.days_waiting(cfg.today)}d ago with no reply (threshold {staleness}d).",
+            f"Inbound {waiting}d ago with no reply (threshold {staleness}d).",
             f"Reply to this {scope}contact to keep the thread alive.",
-            detail=t.summary or t.status, waiting_days=t.days_waiting(cfg.today), thread=t,
+            detail=t.summary or t.status, waiting_days=waiting, thread=t,
         ))
     return items
 

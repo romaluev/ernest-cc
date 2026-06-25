@@ -9,6 +9,7 @@
     ernest draft --concern <id>        draft-only outreach for review
     ernest new-automation --id ...     register a concern + scaffold a skill
     ernest learn [--note "..."]        summarize self-improvement proposals
+    ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
 
 Local-first: every command works with no VPS and no live connectors, reading
 exported data under `data/`. Nothing here ever sends.
@@ -21,7 +22,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, config
-from . import automations, brief, concerns, draft, learn, onboard, watch
+from . import automations, audit, brief, concerns, draft, learn, onboard, watch
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -121,6 +122,18 @@ def cmd_new_automation(cfg: config.Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(cfg: config.Config, args: argparse.Namespace) -> int:
+    paths = audit.run(cfg, window=args.window or "365d",
+                      staleness=args.staleness or "7d",
+                      chunk_days=args.chunk_days)
+    print(f"Audit: wrote {len(paths)} file(s) for a {args.window or '365d'} owed-reply sweep.")
+    for path in paths:
+        print(f"  - {path}")
+    if any("audit-manifest" in p.name for p in paths):
+        print("Live mail: open the manifest in Claude and run /ernest-audit — finish all chunks.")
+    return 0
+
+
 def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
     if args.note:
         learn.add_note(cfg, args.note)
@@ -191,6 +204,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_ln.add_argument("--intent")
     p_ln.add_argument("--window")
     p_ln.set_defaults(func=cmd_learn)
+
+    p_au = sub.add_parser("audit", help="deep owed-reply sweep (chunked manifest)")
+    p_au.add_argument("--window", default="365d", help="lookback window (default 365d)")
+    p_au.add_argument("--staleness", default="7d", help="min days waiting (default 7d)")
+    p_au.add_argument("--chunk-days", type=int, default=30, dest="chunk_days",
+                      help="days per MCP search bucket (default 30)")
+    p_au.set_defaults(func=cmd_audit)
     return parser
 
 

@@ -83,4 +83,14 @@ concerns:
       account: "*"
       staleness: "3d"
       include: "promises"
+
+  # On-demand only — run via `ernest audit --window 365d` + /ernest-audit in Claude.
+  # Not part of daily `ernest start` (too heavy for ambient watch).
+  - id: mail-audit
+    playbook: account-followup-recovery
+    enabled: false
+    params:
+      account: "*"
+      staleness: "7d"
+      window: "365d"
 ```

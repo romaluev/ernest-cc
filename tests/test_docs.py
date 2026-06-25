@@ -28,6 +28,9 @@ REQUIRED_PROMPTS = [
     "Composio",
     "draft these",
     "/ernest-new-automation",
+    "ernest audit",
+    "/ernest-audit",
+    "Don't stop at this week",
 ]
 
 

@@ -19,6 +19,7 @@ Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Co
 
 - External communication is draft-first. Never send, post, invite, publish, update live CRM stages, or modify an external system unless the CEO explicitly approves the exact action.
 - Watch jobs remind only. They may detect slips, stale follow-ups, open promises, and inbound leads. They never draft or mutate live systems.
+- **Deep mail audits** (e.g. "full year", "back catalog"): use `mail-deep-audit` / `ernest audit`. Process every date chunk in the manifest before summarizing. Do not stop after the first recent batch or ask the CEO to continue mid-audit unless a connector is blocked.
 - Draft jobs run only on explicit ask, such as `draft these`, `/ernest-draft`, or a clear CEO instruction.
 - HubSpot is canonical for contacts, companies, pipeline, owners, stages, and next-touch facts.
 - Use the best available data source in this order: VPS brain MCP when configured, local MCP connectors in local-only mode, then exported local files under `data/`. If none exists, say what is missing and offer a dry-run/demo using sample data.

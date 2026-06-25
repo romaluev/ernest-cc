@@ -10,6 +10,7 @@ version: 1.0.0
 |---|---|---|---|
 | `morning-brief` | (brief) | Today's open loops | remind |
 | `account-followup-recovery` | `account-followup-recovery` | Dropped follow-ups; VIP tier filter | watch + draft |
+| `mail-deep-audit` | `account-followup-recovery` | Full-window owed-reply sweep (chunked) | watch + draft |
 | `inbox-prospect-followup` | `inbox-prospect-followup` | Inbound prospects | watch + draft |
 | `add-collaborator` | `add-collaborator` | Teammate missing from threads | assign |
 | `candidate-followup` | `candidate-followup` | Inbox candidates → assign owners | assign |
@@ -22,6 +23,7 @@ version: 1.0.0
 ## Routing
 
 - Slipped follow-ups → `account-followup-recovery`
+- Full year / back-catalog owed replies → `mail-deep-audit` / `/ernest-audit`
 - VIP-only → `important-followups` concern (tier params)
 - Missing collaborator on threads → `add-collaborator`
 - Inbox candidates → `candidate-followup`

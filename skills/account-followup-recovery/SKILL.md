@@ -13,9 +13,14 @@ Find stalled threads, quiet deals, and unmet promises. In watch mode, write remi
 ```yaml
 account: "*"        # company, person, or all priority contacts
 staleness: "7d"
+window: ""          # optional max lookback, e.g. "365d" for deep audits
 include: "threads,deals,promises"
 card_id: ""         # optional reminder card to draft from
 ```
+
+For a **full back-catalog sweep** (e.g. one year), use `mail-deep-audit` or
+`/ernest-audit` instead of the daily watch defaults. Set `window` when the CEO
+names a bounded period.
 
 ## Watch Half
 

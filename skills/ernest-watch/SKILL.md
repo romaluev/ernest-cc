@@ -44,6 +44,11 @@ If using exported files, label every item `source: local-export`. If no real dat
 3. Write one card per non-empty result to the configured watch card directory or `mcp__ernest-brain__write_watch_card`.
 4. If all concerns are clean, reply `[SILENT]`.
 
+**Deep audit exception:** When the CEO requests a long-window owed-reply audit
+(e.g. "full year", "back catalog", "don't stop at this week"), use
+`mail-deep-audit` / `/ernest-audit` — not the daily watch loop. Complete every
+date chunk in the manifest before summarizing.
+
 ## Reminder Card Schema
 
 ```yaml

@@ -45,6 +45,39 @@ Card: `dropped-followups`.
 
 ---
 
+### Full-year owed-reply audit
+
+Daily watch only looks at recent slips (`staleness: 7d`). A **back-catalog audit**
+needs an explicit window and chunked mail search — otherwise live MCP stops after
+the first recent page.
+
+**Terminal first** (writes a chunk manifest Ernest must finish):
+
+```bash
+ernest audit --window 365d
+```
+
+**Then in Claude:**
+
+```text
+/ernest-audit
+
+Audit every thread I owe a reply on in the last 365 days. Process every date
+chunk in the manifest before you summarize. Exclude newsletters, job-seeker
+intros, and cold vendor outreach. Remind only — no drafts.
+```
+
+Shorter plain language:
+
+```text
+Full year audit: every email where they wrote last and I never replied. Finish
+the whole year before you report. Don't stop at this week.
+```
+
+Card: `mail-audit--<date>.md` in `00-Watch/`.
+
+---
+
 ### Important contacts only
 
 ```text
@@ -283,7 +316,8 @@ Find similar profiles on LinkedIn for partnership outreach. Add top candidates t
 
 | Card id | What it catches |
 |---|---|
-| `dropped-followups` | Threads you owe a reply on |
+| `dropped-followups` | Threads you owe a reply on (recent; daily watch) |
+| `mail-audit` | Full-window owed-reply sweep (on-demand; use `ernest audit`) |
 | `important-followups` | VIP/investor-tier slips |
 | `inbox-prospects` | Inbound prospects waiting |
 | `b2b-collaborator-coverage` | Threads missing a designated teammate |
