@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "ernest-brain": {
+      "type": "http",
+      "url": "${ERNEST_BRAIN_URL}",
+      "headers": {
+        "Authorization": "Bearer ${ERNEST_BRAIN_TOKEN}"
+      }
+    },
+    "local-memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "${ERNEST_LOCAL_MEMORY_FILE}"
+      },
+      "disabled": true
+    }
+  },
+  "_modes": {
+    "local_only": "Default. Installer enables local-memory and optional reviewed local connectors. No VPS required.",
+    "vps_brain": "Optional. Uses ernest-brain over authenticated remote MCP; app tokens stay on the VPS."
+  },
+  "_connector_policy": "Never ask the CEO to edit this file. install.sh / install.ps1 writes the active values."
+}

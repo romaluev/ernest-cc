@@ -1,0 +1,25 @@
+{
+  "name": "ernest-cc",
+  "version": "0.1.0",
+  "displayName": "Ernest on Claude Code",
+  "description": "Native Claude Code/Cowork bootstrap for a draft-first CEO operating clone. Works local-only by default and can optionally use a VPS brain.",
+  "author": "Notiky",
+  "license": "MIT",
+  "entrypoints": {
+    "claudeMd": "CLAUDE.md",
+    "settings": "settings.json",
+    "mcp": ".mcp.json",
+    "skills": "skills",
+    "agents": "agents",
+    "commands": "commands",
+    "hooks": "hooks"
+  },
+  "keywords": [
+    "ceo",
+    "automation",
+    "claude-code",
+    "cowork",
+    "mcp",
+    "draft-first"
+  ]
+}

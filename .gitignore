@@ -1,0 +1,12 @@
+.env
+*.env
+*.secret*
+*secret*
+*token*
+__pycache__/
+*.pyc
+logs/*.log
+logs/*.jsonl
+.DS_Store
+ErnestVault/
+.ernest-cc/

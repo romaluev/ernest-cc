@@ -1,0 +1,64 @@
+{
+  "name": "ernest-brain",
+  "version": "0.1.0",
+  "transport": "http",
+  "auth": {
+    "type": "bearer",
+    "header": "Authorization"
+  },
+  "principles": [
+    "The VPS brain is the canonical memory and connector holder.",
+    "The local Claude Code/Cowork plugin calls a small stable MCP surface.",
+    "The brain may create drafts and reminder cards, but live sends remain approval-gated.",
+    "The local machine should not store Gmail/HubSpot/Slack tokens in VPS mode."
+  ],
+  "tools": [
+    {
+      "name": "health",
+      "description": "Return brain status, configured connectors, and read/write capability flags."
+    },
+    {
+      "name": "search_memory",
+      "description": "Search canonical Ernest memory with scope and source references."
+    },
+    {
+      "name": "write_memory",
+      "description": "Write approved internal memory updates. No permission escalation."
+    },
+    {
+      "name": "list_watch_cards",
+      "description": "List recent reminder cards by window, concern, or card id."
+    },
+    {
+      "name": "write_watch_card",
+      "description": "Write a reminder card. Remind-only content; no external draft bodies."
+    },
+    {
+      "name": "search_mail",
+      "description": "Search connected mail for thread summaries and source refs."
+    },
+    {
+      "name": "create_mail_draft",
+      "description": "Create a mail draft or draft object for CEO approval. Never sends."
+    },
+    {
+      "name": "search_hubspot",
+      "description": "Search HubSpot contacts, companies, deals, owners, and activities."
+    },
+    {
+      "name": "search_slack",
+      "description": "Search Slack channels/threads for internal tasks and open promises."
+    }
+  ],
+  "minimum_health_response": {
+    "status": "ok",
+    "connectors": {
+      "mail": "connected|missing|needs_auth",
+      "hubspot": "connected|missing|needs_auth",
+      "slack": "connected|missing|needs_auth",
+      "calendar": "connected|missing|needs_auth"
+    },
+    "mode": "vps-brain",
+    "draft_first_gate": "enabled"
+  }
+}

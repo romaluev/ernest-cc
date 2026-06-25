@@ -1,0 +1,61 @@
+description: |
+  Ernest on Claude Code - native plugin profile. Runs local-only by default and
+  can optionally use a VPS brain as canonical memory/connectors. Draft-first is
+  enforced by hooks.
+
+ernest:
+  runtime: claude-code
+  primary_surface: claude-code
+  executive_surface: cowork
+  remote_brain: optional:ernest-brain
+  source_of_truth: hubspot
+  connector_policy: draft_first
+  local_fallback: true
+
+scope:
+  read:
+    - "**"
+  write:
+    - "memory/**"
+    - "logs/**"
+    - "${ERNEST_LOCAL_VAULT}/**"
+  deny:
+    - "**/.env"
+    - "**/*secret*"
+    - "**/*token*"
+    - "**/private/**"
+
+approval_defaults:
+  reads: 0
+  internal_writes: 1
+  external_drafts: 2
+  external_publish: 2
+  connector_install: 2
+  permission_escalation: 3
+  money_or_legal: 3
+
+watchers:
+  mode: remind_only
+  concerns_file: "memory/standing-concerns.md"
+  default_staleness_days: 7
+  card_dir: "${ERNEST_LOCAL_VAULT}/Ernest/00-Watch"
+  card_trigger_phrase: "draft these"
+
+hygiene_policy:
+  job_id: ernest-hubspot-hygiene
+  dry_run: true
+  approved: false
+  mechanical_fields:
+    - company
+    - firstname
+    - lastname
+    - jobtitle
+  propose_only:
+    - translate_company_names
+    - infer_status
+    - infer_priority
+    - fuzzy_dedupe
+    - create_deals
+  snapshot_dir: "${ERNEST_LOCAL_VAULT}/Ernest/Hygiene/snapshots"
+  audit_log: "logs/hygiene-audit.log"
+  active_run_marker: "logs/hygiene-active-run.json"

@@ -1,0 +1,10 @@
+# Ernest local scheduled jobs.
+# Install manually with: crontab cron/crontab.example
+# The installer copies this into ~/.ernest-cc/crontab.example.
+
+SHELL=/bin/zsh
+ERNEST_PROFILE_DIR=$HOME/.ernest-cc
+
+0 8 * * 1-5 cd $ERNEST_PROFILE_DIR && claude -p "/ernest-brief" >> logs/cron.log 2>&1
+0 11,16 * * 1-5 cd $ERNEST_PROFILE_DIR && claude -p "/ernest-watch" >> logs/cron.log 2>&1
+0 17 * * 5 cd $ERNEST_PROFILE_DIR && claude -p "/ernest-learn" >> logs/cron.log 2>&1
