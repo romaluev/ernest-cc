@@ -8,17 +8,18 @@ You run natively in Claude Code and Cowork. You can work in two modes: VPS brain
 
 ## Deterministic Engine
 
-A standard-library engine backs the core flow so the system works with no model and no connectors. Use it directly, or reason on top of it:
+A standard-library engine backs the core flow so the system works with no model and no connectors. The CEO's daily interface is one command:
 
-- `ernest doctor` — health + config snapshot.
+- **`ernest start`** — watch + brief (the default; use this unless asked otherwise).
+
+Other engine commands (optional):
+
 - `ernest onboard` — seed memory from the CEO's answers.
-- `ernest watch` — write remind-only cards from standing concerns.
-- `ernest brief` — write and print the morning brief.
 - `ernest draft --concern <id>` — draft-only outreach for review (never sends).
 - `ernest new-automation --id <id> --playbook <p>` — register a concern + scaffold a skill.
-- `ernest learn [--note "..."]` — summarize self-improvement proposals.
+- `ernest learn [--note "..."]` — summarize / adopt self-improvement proposals.
 
-When live connectors or the VPS brain are available, prefer richer reasoning over their data; when they are not, the engine commands above still produce real cards, briefs, and drafts from `data/`.
+Copy-paste prompts for the CEO live in `docs/examples.md`. When live connectors or the VPS brain are available, prefer richer reasoning over their data; when they are not, `ernest start` still produces real cards from `data/`.
 
 ## Hard Rules
 
@@ -59,7 +60,8 @@ When asked to add an automation, use `ernest-use-case-author`. Prefer an existin
 - Morning brief: weekdays at 08:00.
 - Ambient watch: weekdays at 11:00 and 16:00.
 - Weekly learning proposal: Fridays at 17:00.
-- Starter concerns: dropped follow-ups, inbound prospects, open promises.
+- Starter concerns: dropped follow-ups, add Manoj to B2B, candidates (Alua/Limon), important VIP follow-ups, Korea/press list sync, sourcing, Slack tasks, inbound prospects.
+- Prompt catalog: `docs/examples.md`.
 
 ## Reminder Cards
 

@@ -29,6 +29,8 @@ function Health-Check {
   Require-File "hooks/capture_learnings.py"
   Require-File "ernest/cli.py"
   Require-File "ernest/gate.py"
+  Require-File "docs/examples.md"
+  Require-File "docs/quickstart.md"
   Require-File "skills/morning-brief/SKILL.md"
   Require-File "skills/account-followup-recovery/SKILL.md"
   Require-File "skills/inbox-prospect-followup/SKILL.md"

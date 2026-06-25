@@ -22,15 +22,18 @@ One command: it refreshes your watch cards and prints the brief. Behind the
 scenes that writes cards to `00-Watch/` and the brief to `00-Daily/`. Nothing is
 ever sent.
 
-Optional power commands (see [daily-use.md](daily-use.md)): `ernest draft`,
-`ernest new-automation`, `ernest learn`.
+Optional power commands: see [examples.md](examples.md) and [daily-use.md](daily-use.md).
 
-Then, for the full assistant experience:
+### Claude Code (optional, richer with live mail/CRM)
 
-1. Sign in to Claude Code or Claude Desktop.
-2. Start Claude Code in `~/.ernest-cc`.
-3. Run `/ernest-onboard`.
-4. Run `/ernest-brief`.
+When you want Ernest to search live Gmail/HubSpot instead of exported files:
+
+1. Sign in to Claude Code.
+2. Open `~/.ernest-cc`.
+3. Run `/ernest-onboard` once to connect accounts.
+4. Use any prompt from [examples.md](examples.md).
+
+You do **not** need Claude for daily value — `ernest start` works alone.
 
 ## Optional: VPS Brain Mode
 
@@ -40,22 +43,21 @@ ERNEST_BRAIN_TOKEN="..." \
 ./install.sh --mode vps
 ```
 
-Then:
+Then authorize Gmail/HubSpot/Slack through the VPS brain and use prompts from
+[examples.md](examples.md). Daily terminal use is still just `ernest start`.
 
-1. Sign in to Claude Code or Claude Desktop.
-2. Authorize Gmail/HubSpot/Slack/Calendar through the links shown by the VPS brain or connector flow.
-3. Start Claude Code in `~/.ernest-cc`.
-4. Run `/ernest-onboard`.
-5. Run `/ernest-brief`.
+Use VPS brain mode only when the Ernest VPS should hold canonical memory and app
+connector tokens. Local mode is the default and is enough to demo and use.
 
-Use VPS brain mode when the existing Ernest VPS should hold canonical memory and app connector tokens.
+## First useful moment
 
-## First Useful Moment
+After `./install.sh`, you already see:
 
-After onboarding, Ernest should show:
+- morning brief summary
+- B2B threads missing Manoj
+- candidates to assign (Alua/Limon)
+- important follow-ups (e.g. Nubank)
+- Korea / press list sync gaps
+- sourcing and Slack task cards
 
-- a morning brief or dry-run brief
-- dropped follow-up cards
-- inbound/prospect follow-up cards
-
-Reply `draft these` or run `/ernest-draft` to prepare approval batches.
+More prompts: [examples.md](examples.md).

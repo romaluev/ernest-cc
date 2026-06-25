@@ -1,6 +1,7 @@
 # Add Or Improve Automations (Scaling)
 
-Three ways to grow the system, smallest first.
+Three ways to grow the system, smallest first. Prompt examples:
+[examples.md](examples.md).
 
 ## 1. Configure an existing playbook (most common)
 

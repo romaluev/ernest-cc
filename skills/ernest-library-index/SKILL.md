@@ -37,5 +37,6 @@ Use this catalog before choosing or creating a workflow.
 ## When Not To Invent
 
 Do not write a new workflow if an installed skill can be configured. Prefer
-adding a concern to `memory/standing-concerns.md` (via `ernest new-automation`)
-over creating a new skill.
+adding a concern (via `ernest new-automation`) over creating a new skill.
+
+Prompt catalog for the CEO: `docs/examples.md` (repo) or [examples.md](../docs/examples.md).

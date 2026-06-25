@@ -42,8 +42,19 @@ After that, the only command you need day to day is:
 ernest start
 ```
 
-(Everything else — `draft`, `new-automation`, `learn` — is optional and
-explained in [docs/daily-use.md](docs/daily-use.md).)
+(Everything else — drafts, new automations, learning — is optional. See
+[daily-use.md](docs/daily-use.md) and **[examples.md](docs/examples.md)** for
+copy-paste prompts.)
+
+## Documentation
+
+| Doc | Purpose |
+|---|---|
+| [docs/quickstart.md](docs/quickstart.md) | Install + first run |
+| [docs/examples.md](docs/examples.md) | **Prompts — simple and complex use-cases** |
+| [docs/daily-use.md](docs/daily-use.md) | Day-to-day commands |
+| [docs/add-automation.md](docs/add-automation.md) | Scale with new checks |
+| [docs/README.md](docs/README.md) | Full doc index |
 
 ## Modes
 

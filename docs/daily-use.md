@@ -7,86 +7,69 @@ ernest start
 ```
 
 It refreshes everything and prints what needs you today. If you only ever run
-one command, run this. Everything below is optional depth.
+one command, run this.
 
-Every step has two equivalent paths: the slash command (model-driven, connector
-aware) and the engine command (deterministic, offline). Use whichever fits.
+**Prompts for Claude:** see [examples.md](examples.md) — simple one-liners and
+complex workflows mapped to your real use-cases (Manoj on B2B, Alua/Limon
+candidates, Nubank, Korea sync, press sheet, sourcing, Slack tasks).
 
-| Task | Slash command | Engine command |
-| --- | --- | --- |
-| Morning brief | `/ernest-brief` | `ernest brief` |
-| Ambient watch | `/ernest-watch` | `ernest watch` |
-| Draft replies | `/ernest-draft` or `draft these` | `ernest draft --concern <id>` |
-| Add automation | `/ernest-new-automation` | `ernest new-automation --id <id> --playbook <p>` |
+## Optional depth
+
+| Task | Say in Claude | Terminal (optional) |
+|---|---|---|
+| Daily brief + watch | "What needs me today?" or `/ernest-brief` | `ernest start` |
+| Draft replies (optional) | `draft these` or `/ernest-draft` | `ernest draft --concern <id>` |
+| Add automation | `/ernest-new-automation` | `ernest new-automation ...` |
 | Weekly learning | `/ernest-learn` | `ernest learn` |
 
-## What `watch` covers
+## What runs on every `start`
 
-A single `ernest watch` (or `/ernest-watch`) runs every enabled concern and
-writes one card per result to `00-Watch/`:
+Behind the scenes, Ernest checks all enabled concerns and writes cards to
+`~/ErnestVault/Ernest/00-Watch/`:
 
-- B2B threads missing your collaborator (add-collaborator)
-- candidates to assign reach-out (candidate-followup)
-- important contacts you owe (account-followup-recovery, tier-scoped)
-- email vs HubSpot list / Google Sheet gaps (list-sync)
-- sourcing targets needing outreach (sourcing-pipeline)
-- open/overdue tasks by owner (task-tracker)
+- B2B threads missing your collaborator (Manoj)
+- B2B candidates to assign (Alua/Limon)
+- important contacts you owe (VIP/investor)
+- email vs HubSpot list / Google Sheet gaps (Korea, press)
+- sourcing targets needing outreach
+- open/overdue Slack tasks by owner
 - dropped follow-ups and inbound prospects
 
-These are remind/assign cards — no drafts unless you ask.
+These are **remind/assign cards** — no drafts unless you ask.
 
-## Morning
+## Scheduling (hands-off)
 
-Run:
+Cron/launchd templates in `~/.ernest-cc/` run `ernest start` (or `ernest brief` /
+`ernest watch`) on a schedule with no Claude session open. See
+`crontab.example` and `launchd.example.plist`.
 
-```text
-/ernest-brief
-```
+## When you want drafts
 
-Ernest returns the items needing CEO attention today. If nothing matters, it returns `[SILENT]`.
-
-## During The Day
-
-Ambient watch runs at 11:00 and 16:00 when scheduled. Manual run:
-
-```text
-/ernest-watch
-```
-
-Cards end with:
-
-```text
-Reply draft these when you want me to prepare actions.
-```
-
-## Drafting
-
-To draft from a card:
+Only if you explicitly want message text prepared. Ernest never sends.
 
 ```text
 draft these
 ```
 
-or:
-
 ```text
-/ernest-draft card_id=<card-id>
+/ernest-draft concern=important-followups
 ```
 
-Ernest prepares an approval batch. It does not send.
+## Adding a new automation
 
-## Adding A New Automation
+One sentence in Claude:
 
 ```text
 /ernest-new-automation
+Every Friday check investor follow-ups. Remind only.
 ```
 
-Describe the recurring work in one sentence. Ernest will either configure an existing skill or propose a new one.
+Or see [add-automation.md](add-automation.md) and [examples.md](examples.md).
 
-## Weekly Learning
+## Weekly learning
 
 ```text
 /ernest-learn
 ```
 
-Ernest reviews recent learning candidates and proposes at most one improvement.
+Ernest surfaces one improvement proposal. Nothing changes until you approve it.
