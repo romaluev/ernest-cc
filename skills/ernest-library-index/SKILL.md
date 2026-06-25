@@ -1,42 +1,34 @@
 ---
 name: ernest-library-index
-description: Use before inventing or adding workflows. Lists Ernest's installed use-cases, their purpose, safety level, and when not to use them.
+description: Catalog of installed use-cases. Check before inventing new workflows.
 version: 1.0.0
 ---
 
 # Ernest Library Index
 
-Use this catalog before choosing or creating a workflow.
-
-## Installed Use-Cases
-
-| Skill | Engine playbook | What it does | Mode |
+| Skill | Playbook | Purpose | Mode |
 |---|---|---|---|
-| `morning-brief` | (brief) | Today's open loops in one screen | remind-only |
-| `account-followup-recovery` | `account-followup-recovery` | Dropped follow-ups; tier-scoped for important contacts (Nubank) | watch + draft |
-| `inbox-prospect-followup` | `inbox-prospect-followup` | Inbound prospects with no follow-up | watch + draft |
-| `add-collaborator` | `add-collaborator` | Add a teammate (Manoj) to B2B threads missing them | remind/assign |
-| `candidate-followup` | `candidate-followup` | B2B marketing/sales candidates to assign (Alua/Limon) | remind/assign |
-| `list-sync` | `list-sync` | Reconcile email vs a HubSpot list / Google Sheet (Korea, Press) | remind/assign |
-| `sourcing-pipeline` | `sourcing-pipeline` | Track partnership/hire targets needing outreach | remind/assign |
-| `slack-task-tracker` | `task-tracker` | Transparent open/overdue tasks by owner | remind/assign |
-| `ernest-watch` | (orchestration) | Runs all enabled concerns and writes cards | remind-only |
-| `ernest-use-case-author` | (self-improvement) | Adds/improves automations via reviewed proposals | proposal-only |
+| `morning-brief` | (brief) | Today's open loops | remind |
+| `account-followup-recovery` | `account-followup-recovery` | Dropped follow-ups; VIP tier filter | watch + draft |
+| `inbox-prospect-followup` | `inbox-prospect-followup` | Inbound prospects | watch + draft |
+| `add-collaborator` | `add-collaborator` | Teammate missing from threads | assign |
+| `candidate-followup` | `candidate-followup` | Inbox candidates → assign owners | assign |
+| `list-sync` | `list-sync` | Email vs CRM or sheet | assign |
+| `sourcing-pipeline` | `sourcing-pipeline` | Pipeline targets to contact | assign |
+| `slack-task-tracker` | `task-tracker` | Open/overdue tasks by owner | assign |
+| `ernest-watch` | (orchestration) | Run all concerns | remind |
+| `ernest-use-case-author` | (meta) | Propose new automations | proposal |
 
-## Selection Rules
+## Routing
 
-- "what slipped" / "important contacts I owe" -> `account-followup-recovery`.
-- "add Manoj to my B2B threads" -> `add-collaborator`.
-- "find candidates to reach out to" -> `candidate-followup`.
-- "sync my Korea email with the HubSpot list" / "sync the press list" -> `list-sync`.
-- "find more people like X for partnerships/hiring" -> `sourcing-pipeline`.
-- "who owns this / what's overdue" -> `slack-task-tracker`.
-- "what should I care about today" -> `morning-brief`.
-- "add a recurring automation" -> `ernest-use-case-author` (or `ernest new-automation`).
+- Slipped follow-ups → `account-followup-recovery`
+- VIP-only → `important-followups` concern (tier params)
+- Missing collaborator on threads → `add-collaborator`
+- Inbox candidates → `candidate-followup`
+- Email vs list → `list-sync`
+- Sourcing list → `sourcing-pipeline`
+- Task ownership → `slack-task-tracker`
+- Daily overview → `morning-brief` / `ernest start`
+- New automation → `ernest-use-case-author` or `ernest new-automation`
 
-## When Not To Invent
-
-Do not write a new workflow if an installed skill can be configured. Prefer
-adding a concern (via `ernest new-automation`) over creating a new skill.
-
-Prompt catalog for the CEO: `docs/examples.md` (repo) or [examples.md](../docs/examples.md).
+Prompts: `docs/examples.md`. Connectors: `docs/connectors.md` (native MCP; no Composio).

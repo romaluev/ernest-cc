@@ -1,63 +1,65 @@
 # Quickstart
 
-Ernest should take the CEO from install to first useful card without editing config files.
-
-## Default: Local-Only Mode
+## Install (one command)
 
 ```bash
 ./install.sh
 ```
 
-That single command installs everything and immediately prints what needs you
-today, with no model and no connectors. It also puts a short `ernest` command on
-your PATH.
+The installer:
 
-### Day to day
+- Copies Ernest to `~/.ernest-cc`
+- Puts `ernest` on your PATH (when possible)
+- Runs the first brief immediately — you see what needs attention without another step
+
+No config files to edit. No Composio. No connectors required.
+
+## Every day
 
 ```bash
 ernest start
 ```
 
-One command: it refreshes your watch cards and prints the brief. Behind the
-scenes that writes cards to `00-Watch/` and the brief to `00-Daily/`. Nothing is
-ever sent.
+Refreshes watch cards and prints the morning brief. Remind/assign only — nothing
+is sent.
 
-Optional power commands: see [examples.md](examples.md) and [daily-use.md](daily-use.md).
+## Optional: Claude Code
 
-### Claude Code (optional, richer with live mail/CRM)
+For live Gmail/HubSpot/Slack (instead of exported files):
 
-When you want Ernest to search live Gmail/HubSpot instead of exported files:
+1. Open `~/.ernest-cc` in Claude Code.
+2. Run `/ernest-onboard` once to connect accounts.
+3. Use prompts from [examples.md](examples.md).
 
-1. Sign in to Claude Code.
-2. Open `~/.ernest-cc`.
-3. Run `/ernest-onboard` once to connect accounts.
-4. Use any prompt from [examples.md](examples.md).
+You do not need Claude for daily value — `ernest start` works alone.
 
-You do **not** need Claude for daily value — `ernest start` works alone.
+## Optional: VPS brain
 
-## Optional: VPS Brain Mode
+Only if canonical memory and connector tokens should live on a remote server:
 
 ```bash
-ERNEST_BRAIN_URL="https://your-vps.example.com/mcp" \
+ERNEST_BRAIN_URL="https://your-server/mcp" \
 ERNEST_BRAIN_TOKEN="..." \
 ./install.sh --mode vps
 ```
 
-Then authorize Gmail/HubSpot/Slack through the VPS brain and use prompts from
-[examples.md](examples.md). Daily terminal use is still just `ernest start`.
+See [vps-brain.md](vps-brain.md). Local mode is the default.
 
-Use VPS brain mode only when the Ernest VPS should hold canonical memory and app
-connector tokens. Local mode is the default and is enough to demo and use.
+## What you see after install
 
-## First useful moment
+Sample data ships with the package so the first run is real, not empty:
 
-After `./install.sh`, you already see:
+- dropped and VIP-tier follow-ups
+- B2B threads missing a designated collaborator
+- inbox candidates to assign
+- email vs CRM list / sheet gaps
+- sourcing targets and open tasks
 
-- morning brief summary
-- B2B threads missing Manoj
-- candidates to assign (Alua/Limon)
-- important follow-ups (e.g. Nubank)
-- Korea / press list sync gaps
-- sourcing and Slack task cards
+Replace sample files under `data/` with your exports, or connect native MCP
+servers — see [connectors.md](connectors.md).
 
-More prompts: [examples.md](examples.md).
+## Update without losing memory
+
+```bash
+git pull --ff-only && ./install.sh --refresh
+```

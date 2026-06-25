@@ -29,7 +29,7 @@ The same `hooks/gate.py` logic (in `ernest/gate.py`) guards both layers.
 
 1. Claude Code/Cowork loads `CLAUDE.md`, skills, commands, hooks, and MCP config.
 2. A schedule or `ernest start` runs the engine; Claude invokes skills when the CEO asks.
-3. Work uses the best available data source: VPS brain, local MCP connectors, then `data/**`.
+3. Work uses: VPS brain (optional) → native MCP connectors → exported files in `data/**`. No Composio. See `docs/connectors.md`.
 4. Hooks block live external mutations; drafts are written, never sent.
 5. Outputs are reminder cards (`00-Watch/`), briefs (`00-Daily/`), and drafts (`00-Drafts/`).
 6. The Stop hook captures improvement candidates to `logs/learning-proposals.jsonl`.

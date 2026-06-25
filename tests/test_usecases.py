@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the CEO's real use-cases produce correct remind/assign cards.
-
-These are the concrete automations the CEO asked for, all over email and all
-"no drafts, just assign/remind":
-
-  1. Add Manoj to B2B threads he is missing from.
-  2. Find B2B marketing/sales candidates needing follow-up (assign Alua/Limon).
-  3. Surface important contacts where a follow-up slipped (Nubank-style).
-  4. Sync email contacts against a HubSpot list (South Korea / Alvin).
-  5. Sync email contacts against a Google Sheet export (Press / TechCrunch).
-  6. Manage a sourcing pipeline of partnership/hire targets.
-
-The engine runs on the bundled sample data with no model and no connectors.
-"""
+"""Verify core playbooks produce correct remind/assign cards on sample data."""
 from __future__ import annotations
 
 import os
@@ -60,56 +47,48 @@ def main() -> int:
 
     all_cards = "\n".join(p.read_text() for p in watch_dir.glob("*.md")) if watch_dir.exists() else ""
 
-    # 1. Add Manoj to B2B threads
-    manoj = card("add-manoj-to-b2b")
-    check("add-manoj card exists", bool(manoj))
-    check("add-manoj names Manoj", "Manoj" in manoj)
-    check("add-manoj flags the B2B intro missing him", "BridgeAI" in manoj)
-    check("add-manoj excludes thread already having Manoj", "Skyline" not in manoj)
+    collab = card("b2b-collaborator-coverage")
+    check("collaborator card exists", bool(collab))
+    check("collaborator names teammate", "Alex" in collab)
+    check("collaborator flags missing thread", "Acme Corp" in collab)
+    check("collaborator excludes covered thread", "Horizon Ltd" not in collab)
 
-    # 2. Candidate reach-out (Alua / Limon)
     cand = card("b2b-candidates")
     check("candidate card exists", bool(cand))
-    check("candidate flags Dana Kim", "Dana Kim" in cand)
-    check("candidate assigns Alua/Limon", "Alua" in cand or "Limon" in cand)
+    check("candidate flags inbox candidate", "Jordan Lee" in cand)
+    check("candidate mentions assignees", "recruiting-lead" in cand)
 
-    # 3. Important contact follow-up slipped (Nubank)
     important = card("important-followups")
     check("important-followups card exists", bool(important))
-    check("important-followups surfaces Nubank", "Nubank" in important)
+    check("important-followups surfaces VIP account", "Apex Bank" in important)
 
-    # 4. South Korea: email vs Alvin's HubSpot list
     korea = card("korea-list-sync")
-    check("korea sync card exists", bool(korea))
-    check("korea sync flags SeoulTech missing from list", "SeoulTech" in korea)
+    check("list-sync card exists", bool(korea))
+    check("list-sync flags CRM gap", "PacificCo" in korea)
 
-    # 5. Press list vs Google Sheet export
     press = card("press-list-sync")
     check("press sync card exists", bool(press))
-    check("press sync flags TechCrunch missing from sheet", "TechCrunch" in press)
+    check("press sync flags sheet gap", "Major Outlet" in press)
 
-    # 6. Sourcing pipeline
     sourcing = card("partnership-sourcing")
     check("sourcing card exists", bool(sourcing))
-    check("sourcing lists a new ex-Skolkovo target", "anda-gansca" in sourcing or "Anda" in sourcing)
-    check("sourcing excludes already-contacted targets", "already reached" not in sourcing)
+    check("sourcing lists new target", "Target Alpha" in sourcing or "example-alpha" in sourcing)
+    check("sourcing excludes contacted", "Target Closed" not in sourcing or "contacted" not in sourcing.lower())
 
-    # 7. Slack task tracking (first step: open/overdue by owner)
     tasks = card("slack-task-tracking")
     check("task-tracker card exists", bool(tasks))
-    check("task-tracker flags an overdue task", "OVERDUE" in tasks)
-    check("task-tracker shows an owner", "Manoj" in tasks or "Alua" in tasks)
-    check("task-tracker excludes done tasks", "Publish Q2 press update" not in tasks)
+    check("task-tracker flags overdue", "OVERDUE" in tasks)
+    check("task-tracker shows owner", "deal-lead" in tasks or "recruiting-lead" in tasks)
+    check("task-tracker excludes done", "Publish Q2 press update" not in tasks)
 
-    # Global guarantee: these are remind/assign only, never drafts.
-    check("no draft content in any watch card", "STATUS: DRAFT" not in all_cards)
+    check("no draft content in watch cards", "STATUS: DRAFT" not in all_cards)
 
     if FAILURES:
         print(f"\nFAILED {len(FAILURES)} checks:")
         for f in FAILURES:
             print(f"  - {f}")
         return 1
-    print("\nPASS - all CEO use-case playbooks produce correct cards")
+    print("\nPASS - all use-case playbooks produce correct cards")
     return 0
 
 

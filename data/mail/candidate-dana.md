@@ -1,7 +1,7 @@
-# Candidate: Dana Kim
+# Candidate: Jordan Lee
 
 source: local-export
-contact: Dana Kim
+contact: Jordan Lee
 company: (independent)
 category: candidate
 intent: hire
@@ -10,5 +10,5 @@ last_inbound: 2026-06-21
 subject: Re: B2B growth role
 status: Strong inbound candidate, no follow-up sent
 
-Dana is an experienced B2B marketing/sales candidate who replied with interest.
-No follow-up has been sent. Reach-out should be assigned to Alua or Limon.
+Experienced B2B marketing/sales candidate who replied with interest. No
+follow-up sent yet.

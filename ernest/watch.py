@@ -6,7 +6,7 @@ state what slipped or what to assign, and the suggested next action.
 Playbooks (mapped to the CEO's real use-cases):
   - account-followup-recovery : dropped follow-ups (optionally priority-tier scoped)
   - inbox-prospect-followup   : inbound prospects needing a first follow-up
-  - add-collaborator          : ensure a teammate is on matching threads (e.g. Manoj on B2B)
+  - add-collaborator          : ensure a teammate is on matching threads (B2B, etc.)
   - candidate-followup        : hiring candidates in the inbox to assign reach-out
   - list-sync                 : reconcile email contacts against a HubSpot list / sheet
   - sourcing-pipeline         : manage a list of partnership/hire targets to contact

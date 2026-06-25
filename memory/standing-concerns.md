@@ -1,11 +1,7 @@
 # Standing Concerns
 
-Ernest reads this on every ambient-watch run. The CEO adjusts it by talking:
-"watch partnership threads", "stop inbound watch", "tighten follow-ups to 3
-days", "add Manoj to B2B threads". The CEO should never edit YAML by hand.
-
-Names like `collaborator`, `assignees`, and `priority_tiers` are parameters -
-change them to fit your team.
+Ernest reads this on every watch run. Adjust by talking to Ernest — never edit
+YAML by hand. Set `collaborator`, `assignees`, and `list_name` to match your team.
 
 ```yaml
 concerns:
@@ -32,11 +28,11 @@ concerns:
       intent: "partnership"
       window: "90d"
 
-  - id: add-manoj-to-b2b
+  - id: b2b-collaborator-coverage
     playbook: add-collaborator
     enabled: true
     params:
-      collaborator: "Manoj"
+      collaborator: "Alex"
       category: "b2b"
 
   - id: b2b-candidates
@@ -44,7 +40,7 @@ concerns:
     enabled: true
     params:
       role: "B2B marketing/sales"
-      assignees: "Alua, Limon"
+      assignees: "recruiting-lead, sales-lead"
       window: "180d"
 
   - id: korea-list-sync
@@ -55,7 +51,7 @@ concerns:
       match_key: "company"
       target: "data/lists/korea-hubspot.csv"
       target_key: "company"
-      list_name: "Alvin's HubSpot Korea list"
+      list_name: "Regional HubSpot list"
 
   - id: press-list-sync
     playbook: list-sync
@@ -65,7 +61,7 @@ concerns:
       match_key: "company"
       target: "data/lists/press-sheet.csv"
       target_key: "outlet"
-      list_name: "press tracker sheet"
+      list_name: "Press tracker sheet"
 
   - id: partnership-sourcing
     playbook: sourcing-pipeline
@@ -80,7 +76,6 @@ concerns:
     params:
       source: "data/slack/tasks.csv"
 
-  # Overlaps dropped-followups; enable once you track explicit promises.
   - id: open-promises
     playbook: account-followup-recovery
     enabled: false

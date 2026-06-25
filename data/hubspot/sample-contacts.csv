@@ -1,4 +1,4 @@
 email,firstname,lastname,company,tier,last_touch,next_action
 alex@example.com,Alex,Example,ExampleCo,partner,2026-06-18,Send proposal follow-up
-jordan@novapartners.com,Jordan,Rivera,NovaPartners,partner,2026-06-23,Qualify partnership
-lucas@nubank.com,Lucas,Silva,Nubank,vip,2026-06-20,Re-engage important account
+jordan@partner.co,Jordan,Rivera,PartnerCo,partner,2026-06-23,Qualify partnership
+lucas@apexbank.com,Lucas,Silva,Apex Bank,vip,2026-06-20,Re-engage important account

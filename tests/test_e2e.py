@@ -54,11 +54,11 @@ def main() -> int:
     check("doctor reports health", "Ernest health check: ok" in doctor.stdout)
     check("doctor reports local mode", "mode: local" in doctor.stdout.lower())
 
-    onboard = run(profile, vault, "onboard", "--name", "Sam Director",
-                  "--role", "CEO", "--company", "UnicornCo", "--non-interactive")
+    onboard = run(profile, vault, "onboard", "--name", "CEO",
+                  "--role", "CEO", "--company", "Acme Inc", "--non-interactive")
     check("onboard exits 0", onboard.returncode == 0)
     check("onboard wrote company",
-          "UnicornCo" in (profile / "memory" / "company-core.md").read_text())
+          "Acme Inc" in (profile / "memory" / "company-core.md").read_text())
     check("onboard marker written", (vault / ".onboarded").exists())
 
     watch = run(profile, vault, "watch")

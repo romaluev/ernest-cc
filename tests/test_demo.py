@@ -20,8 +20,8 @@ def main() -> int:
         failures.append(f"demo exited {proc.returncode}: {proc.stderr}")
 
     out = proc.stdout
-    for needle in ("Ernest health check: ok", "Onboarded", "00-Watch", "00-Daily",
-                   "00-Drafts", "Adopted proposal", "partner-renewals"):
+    for needle in ("Morning brief", "00-Watch", "00-Daily", "00-Drafts",
+                   "Adopted proposal", "partner-renewals"):
         if needle not in out:
             failures.append(f"demo output missing '{needle}'")
 

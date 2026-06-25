@@ -87,6 +87,7 @@ health_check() {
   require_file "ernest/cli.py"
   require_file "ernest/gate.py"
   require_file "docs/examples.md"
+  require_file "docs/connectors.md"
   require_file "docs/quickstart.md"
   require_file "skills/morning-brief/SKILL.md"
   require_file "skills/account-followup-recovery/SKILL.md"

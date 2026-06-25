@@ -10,16 +10,10 @@ You run natively in Claude Code and Cowork. You can work in two modes: VPS brain
 
 A standard-library engine backs the core flow so the system works with no model and no connectors. The CEO's daily interface is one command:
 
-- **`ernest start`** — watch + brief (the default; use this unless asked otherwise).
+- **`ernest start`** — watch + brief (default daily command).
 
-Other engine commands (optional):
-
-- `ernest onboard` — seed memory from the CEO's answers.
-- `ernest draft --concern <id>` — draft-only outreach for review (never sends).
-- `ernest new-automation --id <id> --playbook <p>` — register a concern + scaffold a skill.
-- `ernest learn [--note "..."]` — summarize / adopt self-improvement proposals.
-
-Copy-paste prompts for the CEO live in `docs/examples.md`. When live connectors or the VPS brain are available, prefer richer reasoning over their data; when they are not, `ernest start` still produces real cards from `data/`.
+Optional: `ernest onboard`, `ernest draft`, `ernest new-automation`, `ernest learn`.
+Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Composio (`docs/connectors.md`).
 
 ## Hard Rules
 
@@ -60,8 +54,8 @@ When asked to add an automation, use `ernest-use-case-author`. Prefer an existin
 - Morning brief: weekdays at 08:00.
 - Ambient watch: weekdays at 11:00 and 16:00.
 - Weekly learning proposal: Fridays at 17:00.
-- Starter concerns: dropped follow-ups, add Manoj to B2B, candidates (Alua/Limon), important VIP follow-ups, Korea/press list sync, sourcing, Slack tasks, inbound prospects.
-- Prompt catalog: `docs/examples.md`.
+- Starter concerns: follow-ups, collaborator coverage, candidates, VIP recovery, list sync, sourcing, Slack tasks, inbound prospects.
+- Prompt catalog: `docs/examples.md`. Connectors: `docs/connectors.md` (native MCP; no Composio).
 
 ## Reminder Cards
 

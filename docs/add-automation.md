@@ -1,75 +1,63 @@
-# Add Or Improve Automations (Scaling)
+# Add or Scale Automations
 
-Three ways to grow the system, smallest first. Prompt examples:
-[examples.md](examples.md).
+Three paths, smallest first. Prompt examples: [examples.md](examples.md).
 
-## 1. Configure an existing playbook (most common)
+## 1. Configure an existing playbook
 
-Every automation is a *concern* in `memory/standing-concerns.md` bound to a
-*playbook*. Adding a concern is usually all you need. Use a command, never hand-edited YAML:
+Most new behavior is a **concern** (trigger + parameters), not a new skill:
 
 ```bash
-# Add Manoj to a different thread category
-ernest new-automation --id add-manoj-to-partnerships \
-  --playbook add-collaborator --intent partnerships
-
-# Watch a specific important account
-ernest new-automation --id acme-recovery \
-  --playbook account-followup-recovery --staleness 5d
+ernest new-automation --id regional-crm-sync \
+  --playbook list-sync --staleness 7d
 ```
 
-Available playbooks:
+```bash
+ernest new-automation --id b2b-deal-lead \
+  --playbook add-collaborator
+```
 
-| Playbook | Use it for |
+| Playbook | Use for |
 |---|---|
-| `account-followup-recovery` | dropped follow-ups; set `priority_tiers` for important-only |
-| `inbox-prospect-followup` | inbound prospects matching an intent |
-| `add-collaborator` | ensure a teammate is on a thread category |
-| `candidate-followup` | candidates in the inbox to assign |
-| `list-sync` | reconcile email vs a HubSpot list / sheet |
-| `sourcing-pipeline` | track targets to source/contact |
-| `task-tracker` | open/overdue tasks by owner |
+| `account-followup-recovery` | Stalled threads; add `priority_tiers` for VIP-only |
+| `inbox-prospect-followup` | Inbound leads by intent |
+| `add-collaborator` | Teammate missing from thread category |
+| `candidate-followup` | Inbox candidates → assign owners |
+| `list-sync` | Email vs CRM list or sheet |
+| `sourcing-pipeline` | Targets to source/contact |
+| `task-tracker` | Open/overdue tasks |
 
-A new concern is picked up on the next `ernest watch` (or `/ernest-watch`).
+Next `ernest start` picks it up.
 
-## 2. Let Ernest propose one (self-improvement)
-
-Ernest watches for repeated manual work and records candidates. Nothing changes
-automatically — you approve by adopting:
+## 2. Self-improvement (propose → approve)
 
 ```bash
-ernest learn                       # see proposals + a ready-to-run adopt command
-ernest learn --adopt 1 --id partner-renewals \
+ernest learn                              # see proposals
+ernest learn --adopt 1 --id my-check \
   --playbook account-followup-recovery --staleness 7d
+ernest start
 ```
 
-`--adopt` is the approval step: it registers the concern and scaffolds a skill,
-then `ernest watch` puts it to work. Adoption is logged; revert with git.
+Nothing changes until `--adopt` or explicit CEO approval in Claude.
 
-## 3. Author a brand-new skill
+## 3. New skill (when no playbook fits)
 
-When no playbook fits, use `ernest-use-case-author` (`/ernest-new-automation`).
-It interviews you briefly and produces a reviewable proposal: trigger, sources,
-output, safety level, dry-run, and rollback. New behavior is never applied
-silently.
+`/ernest-new-automation` in Claude — produces a reviewable proposal with
+trigger, sources, safety level, dry-run, and rollback. Never applied silently.
+
+## Connectors for live data
+
+| Need | Offline | Live |
+|---|---|---|
+| Mail | `data/mail/` | Gmail/Outlook MCP |
+| CRM | `data/hubspot/` | HubSpot MCP |
+| Sheet | `data/lists/*.csv` | Sheets MCP |
+| Slack tasks | `data/slack/tasks.csv` | Slack MCP |
+| New sourcing | manual CSV | search MCP |
+
+No Composio. See [connectors.md](connectors.md).
 
 ## Governance
 
-Ernest may propose new concerns, schedules, skills, and memory/config updates.
-Ernest may **not** auto-approve external sends, new credentials, new connectors,
-legal/money authority, or wider memory access. Every change is reviewable and
-reversible (`git revert` or `./install.sh --refresh` to a previous tag).
-
-## Connector-backed use-cases
-
-Some use-cases reach beyond email and need an authorized connector:
-
-- Google Sheet sync (press tracker) — a Sheets MCP, or export the sheet to
-  `data/lists/*.csv`.
-- HubSpot list sync (Korea/Alvin) — a HubSpot MCP, or export the list to CSV.
-- Sourcing new people (ex-Skolkovo operators) — a web/LinkedIn search connector.
-- Slack task creation/posting — a Slack MCP.
-
-Until a connector is authorized, the engine runs these against exported files in
-`data/` so you can demo and use them offline. Writing back to those systems is
-always approval-gated.
+Ernest may propose concerns, schedules, and skills. Ernest may **not** auto-approve
+sends, credentials, new connectors, or legal/money authority. Revert via git or
+`./install.sh --refresh` to a prior version.

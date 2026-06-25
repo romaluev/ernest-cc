@@ -30,6 +30,7 @@ function Health-Check {
   Require-File "ernest/cli.py"
   Require-File "ernest/gate.py"
   Require-File "docs/examples.md"
+  Require-File "docs/connectors.md"
   Require-File "docs/quickstart.md"
   Require-File "skills/morning-brief/SKILL.md"
   Require-File "skills/account-followup-recovery/SKILL.md"

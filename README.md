@@ -1,70 +1,55 @@
 # Ernest on Claude Code
 
-Native Claude Code/Cowork bootstrap for Ernest, the draft-first CEO operating
-clone.
+Draft-first CEO operating clone for Claude Code/Cowork. Local-first: works with
+no VPS, no Composio, and no connectors out of the box.
 
-This package installs with one command, configures the CEO's local Claude
-surface, works without the Ernest VPS by default, and optionally connects to the
-VPS Ernest brain.
-
-It ships the CEO's real, email-centric use-cases out of the box. Most are
-**remind/assign only** — no drafting required:
-
-- **Morning brief** — the one screen of what needs you today.
-- **Add a collaborator to B2B threads** — flag intros missing your reliable
-  teammate (e.g. Manoj) so they don't get dropped.
-- **Candidate follow-up** — surface B2B marketing/sales candidates in the inbox
-  and assign reach-out (e.g. Alua/Limon).
-- **Important-contact recovery** — important contacts (e.g. Nubank) where a
-  follow-up slipped.
-- **List sync** — reconcile email contacts against a HubSpot list (Korea/Alvin)
-  or a Google Sheet (press/TechCrunch).
-- **Sourcing pipeline** — track partnership/hire targets needing outreach.
-- **Slack task tracking** — transparent open/overdue tasks by owner.
-- **Dropped/inbound follow-ups** — general recovery and inbound prospects.
-
-The CEO should not edit JSON, cron files, or connector config manually. Use
-`install.sh` or `install.ps1`, then authorize accounts when prompted.
-
-## One command
+## Install and run
 
 ```bash
-./install.sh
+./install.sh      # once — prints your first brief
+ernest start      # daily
 ```
 
-That's it. The installer sets everything up and immediately prints what needs
-you today — real follow-ups, assignments, and syncs from your data — with no
-model and no connectors required.
+No config editing. Prompts: [docs/examples.md](docs/examples.md).
 
-After that, the only command you need day to day is:
+## What it does
 
-```bash
-ernest start
-```
+Remind/assign automations over email (and optional Slack tasks). Drafts only
+when you ask; the gate blocks sends and live CRM writes.
 
-(Everything else — drafts, new automations, learning — is optional. See
-[daily-use.md](docs/daily-use.md) and **[examples.md](docs/examples.md)** for
-copy-paste prompts.)
+| Automation | Purpose |
+|---|---|
+| Morning brief | One screen of open loops |
+| Follow-up recovery | Threads and VIP-tier slips |
+| Collaborator coverage | Threads missing a designated teammate |
+| Candidate routing | Inbox hires → assign owners |
+| List sync | Email vs CRM list or spreadsheet |
+| Sourcing pipeline | Targets needing outreach |
+| Task tracking | Open/overdue by owner |
+| Inbound prospects | Partnership/sales leads waiting |
+
+## Connectors
+
+Optional. Native MCP servers or file exports under `data/` — not Composio.
+Details: [docs/connectors.md](docs/connectors.md).
 
 ## Documentation
 
 | Doc | Purpose |
 |---|---|
-| [docs/quickstart.md](docs/quickstart.md) | Install + first run |
-| [docs/examples.md](docs/examples.md) | **Prompts — simple and complex use-cases** |
-| [docs/daily-use.md](docs/daily-use.md) | Day-to-day commands |
-| [docs/add-automation.md](docs/add-automation.md) | Scale with new checks |
-| [docs/README.md](docs/README.md) | Full doc index |
+| [docs/quickstart.md](docs/quickstart.md) | Install + daily use |
+| [docs/examples.md](docs/examples.md) | Copy-paste prompts |
+| [docs/connectors.md](docs/connectors.md) | Live data without Composio |
+| [docs/daily-use.md](docs/daily-use.md) | Beyond `start` |
+| [docs/add-automation.md](docs/add-automation.md) | Scale |
+| [docs/README.md](docs/README.md) | Full index |
 
 ## Modes
 
-- **Local-only**: default. Uses local memory, exported data under `data/**`,
-  and explicitly reviewed local MCP connectors.
-- **VPS brain**: optional. Memory and app tokens live on the VPS; local Claude
-  Code/Cowork talks to the brain over remote MCP.
+- **Local** (default): engine + exports in `data/`, optional native MCP.
+- **VPS brain** (optional): remote MCP for memory/connectors on your server.
 
 ## Safety
 
-Ernest is draft-first. `hooks/pre_tool_use.py` blocks live external sends,
-posts, CRM mutations, calendar mutations, and risky filesystem writes before
-Claude can execute them.
+`hooks/pre_tool_use.py` blocks external sends, posts, and CRM mutations before
+Claude executes them. See [docs/security.md](docs/security.md).

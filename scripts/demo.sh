@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# Ernest end-to-end demo. Runs the whole lifecycle in a throwaway sandbox using
-# the bundled sample data. No install, no model, no connectors, no network.
-#
+# End-to-end demo on bundled sample data. No install, model, connectors, or network.
 #   ./scripts/demo.sh
-#
-# It prints each step and the real artifacts produced (watch cards, brief,
-# draft-only outreach), then shows the self-improvement loop (observe -> propose
-# -> adopt -> live).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,34 +20,26 @@ export PYTHONDONTWRITEBYTECODE=1
 ernest() { python3 -m ernest.cli "$@"; }
 step() { printf '\n=== %s ===\n' "$1"; }
 
-step "1. Health check"
-ernest doctor
+step "1. Start (watch + brief)"
+ernest start
 
-step "2. Onboard (non-interactive)"
-ernest onboard --non-interactive --name "Sam Director" --role "CEO" \
-  --company "UnicornCo" --icp "Series A-C B2B SaaS founders"
+step "2. Optional onboard"
+ernest onboard --non-interactive --name "CEO" --role "CEO" --company "Acme Inc"
 
-step "3. Ambient watch -> reminder cards"
-ernest watch
-
-step "4. Morning brief"
-ernest brief
-
-step "5. Draft-only outreach (never sends)"
+step "3. Draft (optional)"
 ernest draft --concern dropped-followups
 
-step "6. Scale: add a new automation by command"
+step "4. Scale: new automation"
 ernest new-automation --id investor-followups \
   --playbook account-followup-recovery --staleness 5d \
-  --description "Watch investor threads weekly"
+  --description "Weekly investor follow-up check"
 
-step "7. Self-improvement: observe -> propose -> adopt -> live"
-ernest learn --note "CEO keeps manually checking partner renewals every Monday."
+step "5. Self-improve: learn -> adopt"
+ernest learn --note "CEO keeps checking partner renewals every Monday."
 ernest learn --adopt 1 --id partner-renewals \
   --playbook account-followup-recovery --staleness 7d
-ernest watch
+ernest start
 
-step "Artifacts produced"
+step "Artifacts"
 find "$VAULT/Ernest" -type f | sort
-printf '\nProfile: %s\nVault:   %s\n' "$PROFILE" "$VAULT"
-printf 'Sandbox is disposable: rm -rf %s\n' "$SANDBOX"
+printf '\nSandbox: rm -rf %s\n' "$SANDBOX"
