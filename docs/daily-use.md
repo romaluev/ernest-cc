@@ -1,5 +1,14 @@
 # Daily Use
 
+## The one command
+
+```bash
+ernest start
+```
+
+It refreshes everything and prints what needs you today. If you only ever run
+one command, run this. Everything below is optional depth.
+
 Every step has two equivalent paths: the slash command (model-driven, connector
 aware) and the engine command (deterministic, offline). Use whichever fits.
 

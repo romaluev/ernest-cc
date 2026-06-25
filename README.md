@@ -26,22 +26,24 @@ It ships the CEO's real, email-centric use-cases out of the box. Most are
 The CEO should not edit JSON, cron files, or connector config manually. Use
 `install.sh` or `install.ps1`, then authorize accounts when prompted.
 
-## Verify it works in 30 seconds
-
-A standard-library engine backs the core flow, so it runs with no model and no
-connectors:
+## One command
 
 ```bash
 ./install.sh
-~/.ernest-cc/bin/ernest doctor
-~/.ernest-cc/bin/ernest onboard --non-interactive --company "UnicornCo"
-~/.ernest-cc/bin/ernest watch && ~/.ernest-cc/bin/ernest brief
-~/.ernest-cc/bin/ernest draft --concern dropped-followups
 ```
 
-This produces real watch cards, a morning brief, and labeled draft-only
-outreach from the sample data in `data/`. The Claude Code skills and slash
-commands are the natural-language layer on top of these same commands.
+That's it. The installer sets everything up and immediately prints what needs
+you today — real follow-ups, assignments, and syncs from your data — with no
+model and no connectors required.
+
+After that, the only command you need day to day is:
+
+```bash
+ernest start
+```
+
+(Everything else — `draft`, `new-automation`, `learn` — is optional and
+explained in [docs/daily-use.md](docs/daily-use.md).)
 
 ## Modes
 

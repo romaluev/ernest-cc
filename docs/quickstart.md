@@ -8,21 +8,22 @@ Ernest should take the CEO from install to first useful card without editing con
 ./install.sh
 ```
 
-This works without the Ernest VPS. The installer creates a local vault, local
-memory, local exported-data folders, and an `ernest` CLI launcher.
+That single command installs everything and immediately prints what needs you
+today, with no model and no connectors. It also puts a short `ernest` command on
+your PATH.
 
-### Verify in 30 seconds (no model, no connectors)
+### Day to day
 
 ```bash
-~/.ernest-cc/bin/ernest doctor
-~/.ernest-cc/bin/ernest onboard            # add --non-interactive --company "..." to script it
-~/.ernest-cc/bin/ernest watch
-~/.ernest-cc/bin/ernest brief
-~/.ernest-cc/bin/ernest draft --concern dropped-followups
+ernest start
 ```
 
-You should see watch cards in `00-Watch/`, a brief in `00-Daily/`, and labeled
-draft-only outreach in `00-Drafts/`. Nothing is ever sent.
+One command: it refreshes your watch cards and prints the brief. Behind the
+scenes that writes cards to `00-Watch/` and the brief to `00-Daily/`. Nothing is
+ever sent.
+
+Optional power commands (see [daily-use.md](daily-use.md)): `ernest draft`,
+`ernest new-automation`, `ernest learn`.
 
 Then, for the full assistant experience:
 

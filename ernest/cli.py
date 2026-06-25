@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Ernest command-line engine.
 
+    ernest start                       the one command: watch + brief
     ernest doctor                      health + config snapshot
     ernest onboard [--non-interactive] seed memory from answers
     ernest watch                       write remind-only cards
@@ -60,6 +61,16 @@ def cmd_onboard(cfg: config.Config, args: argparse.Namespace) -> int:
     result = onboard.run(cfg, answers)
     print(f"Onboarded {result.name or 'CEO'} at {result.company or '(company TBD)'}.")
     print("Next: `ernest watch` then `ernest brief`.")
+    return 0
+
+
+def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
+    cards = watch.run(cfg)
+    path, summary = brief.run(cfg)
+    print(summary)
+    if cards:
+        print(f"{len(cards)} thing(s) need attention. Details: {cfg.watch_dir}")
+    print(f"Full brief: {path}")
     return 0
 
 
@@ -141,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"ernest {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("start", help="the one command: watch + brief").set_defaults(func=cmd_start)
     sub.add_parser("doctor", help="health + config snapshot").set_defaults(func=cmd_doctor)
 
     p_on = sub.add_parser("onboard", help="seed memory from answers")

@@ -1,6 +1,7 @@
 param(
   [switch]$HealthOnly,
   [switch]$Refresh,
+  [switch]$NoRun,
   [ValidateSet("local", "vps")]
   [string]$Mode = $(if ($env:ERNEST_MODE) { $env:ERNEST_MODE } else { "local" })
 )
@@ -129,5 +130,16 @@ Write-Output "Ernest installed to $ProfileDir"
 Write-Output "Mode: $Mode"
 Write-Output "Vault: $VaultDir"
 Write-Output ""
-Write-Output "Verify now: $ProfileDir\bin\ernest.cmd doctor"
-Write-Output "Then authorize Gmail/HubSpot/Slack/Calendar and run /ernest-onboard in Claude Code."
+$ErnestCmd = Join-Path $ProfileDir "bin\ernest.cmd"
+if (-not $NoRun) {
+  Write-Output ""
+  Write-Output "Here is what needs you right now:"
+  Write-Output "------------------------------------------------------------"
+  & $ErnestCmd start
+  Write-Output "------------------------------------------------------------"
+}
+Write-Output ""
+Write-Output "From now on, just run:"
+Write-Output "    $ErnestCmd start"
+Write-Output ""
+Write-Output "Optional: '$ErnestCmd onboard', or open Claude Code in $ProfileDir and run /ernest-onboard to connect accounts."

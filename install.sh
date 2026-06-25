@@ -8,22 +8,45 @@ MEMORY_FILE="${ERNEST_LOCAL_MEMORY_FILE:-$VAULT_DIR/memory.json}"
 MODE="${ERNEST_MODE:-local}"
 
 usage() {
-  printf '%s\n' "Usage: ./install.sh [--health-only] [--refresh] [--mode local|vps]"
+  printf '%s\n' "Usage: ./install.sh [--health-only] [--refresh] [--no-run] [--mode local|vps]"
   printf '%s\n' "  --refresh  update code/skills/engine in an existing profile; keep memory + config"
+  printf '%s\n' "  --no-run   do not run the first brief after installing"
 }
 
 HEALTH_ONLY=0
 REFRESH=0
+NO_RUN=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --health-only) HEALTH_ONLY=1 ;;
     --refresh) REFRESH=1 ;;
+    --no-run) NO_RUN=1 ;;
     --mode) shift; MODE="${1:-local}" ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; usage; exit 2 ;;
   esac
   shift
 done
+
+# Best-effort: put a short `ernest` command on PATH so the CEO never types a
+# long path. Returns the command name to show in instructions.
+link_to_path() {
+  local target="$PROFILE_DIR/bin/ernest" dir
+  # Only link the canonical install; never point a global command at a custom
+  # or sandbox profile.
+  if [ "$PROFILE_DIR" != "$HOME/.ernest-cc" ]; then
+    printf '%s' "$target"
+    return 0
+  fi
+  for dir in "$HOME/.local/bin" /usr/local/bin /opt/homebrew/bin; do
+    case ":$PATH:" in *":$dir:"*) ;; *) continue ;; esac
+    if mkdir -p "$dir" 2>/dev/null && ln -sf "$target" "$dir/ernest" 2>/dev/null; then
+      printf 'ernest'
+      return 0
+    fi
+  done
+  printf '%s' "$target"
+}
 
 copy_code() {
   cp -R "$ROOT"/CLAUDE.md "$ROOT"/settings.json "$ROOT"/ernest.yaml "$PROFILE_DIR"/
@@ -149,19 +172,20 @@ EOF
 cat > "$PROFILE_DIR/launchd.example.plist" < "$ROOT/cron/com.notiky.ernest.example.plist"
 cat > "$PROFILE_DIR/crontab.example" < "$ROOT/cron/crontab.example"
 
+ERNEST_CMD="$(link_to_path)"
+
+if [ "$NO_RUN" != "1" ]; then
+  printf '\n%s\n' "Here is what needs you right now:"
+  printf '%s\n' "------------------------------------------------------------"
+  "$PROFILE_DIR/bin/ernest" start || true
+  printf '%s\n' "------------------------------------------------------------"
+fi
+
+printf '\n%s\n' "Ernest is installed ($MODE mode)."
 printf '%s\n' ""
-printf '%s\n' "Ernest installed to $PROFILE_DIR"
-printf '%s\n' "Mode: $MODE"
-printf '%s\n' "Vault: $VAULT_DIR"
+printf '%s\n' "From now on, just run:"
+printf '%s\n' "    $ERNEST_CMD start"
 printf '%s\n' ""
-printf '%s\n' "Verify it works right now (no model, no connectors needed):"
-printf '%s\n' "  $PROFILE_DIR/bin/ernest doctor"
-printf '%s\n' "  $PROFILE_DIR/bin/ernest onboard"
-printf '%s\n' "  $PROFILE_DIR/bin/ernest watch && $PROFILE_DIR/bin/ernest brief"
-printf '%s\n' ""
-printf '%s\n' "Then for the full assistant experience:"
-printf '%s\n' "1. Sign in to Claude Code / Claude Desktop if needed."
-printf '%s\n' "2. Authorize Gmail/HubSpot/Slack/Calendar via the VPS brain or local connector flow."
-printf '%s\n' "3. Start Claude Code in $PROFILE_DIR and run /ernest-onboard."
-printf '%s\n' ""
-printf '%s\n' "Add $PROFILE_DIR/bin to your PATH to call 'ernest' from anywhere."
+printf '%s\n' "Optional, when you have a minute:"
+printf '%s\n' "  - $ERNEST_CMD onboard          tell Ernest about you and your company"
+printf '%s\n' "  - open Claude Code in $PROFILE_DIR and run /ernest-onboard to connect Gmail/HubSpot/Slack"

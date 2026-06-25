@@ -30,6 +30,10 @@ def main() -> int:
     failures: list[str] = []
     if proc.returncode != 0:
         failures.append(f"installer failed: {proc.stdout} {proc.stderr}")
+    if "Here is what needs you right now" not in proc.stdout:
+        failures.append("installer did not auto-show the first brief")
+    if "start" not in proc.stdout:
+        failures.append("installer did not surface the one-command 'start'")
     mcp_path = profile / ".mcp.json"
     if not mcp_path.exists():
         failures.append("generated .mcp.json missing")
@@ -62,7 +66,7 @@ def main() -> int:
             "ERNEST_LOCAL_VAULT": str(vault),
             "ERNEST_TODAY": "2026-06-25",
         })
-        for sub in ("doctor", "watch", "brief"):
+        for sub in ("doctor", "watch", "brief", "start"):
             res = subprocess.run(["bash", str(launcher), sub], text=True,
                                  capture_output=True, env=run_env, check=False)
             if res.returncode != 0:
