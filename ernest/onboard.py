@@ -63,15 +63,23 @@ def _write_company_core(cfg: Config, a: Answers) -> None:
 
 def _write_persona(cfg: Config, a: Answers) -> None:
     path = cfg.memory_dir / "ceo-persona.md"
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    header = f"# CEO Persona\n\n- Name: {a.name}\n- Role: {a.role}\n"
-    if text.lstrip().startswith("# CEO Persona"):
-        body = text.split("\n", 1)[1] if "\n" in text else ""
-        path.write_text(header + body, encoding="utf-8")
-    else:
-        path.write_text(header + "\n" + text, encoding="utf-8")
+    cfg.memory_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join([
+        "# CEO Persona",
+        "",
+        f"- Name: {a.name or '(set during onboarding)'}",
+        f"- Role: {a.role or 'CEO'}",
+        f"- Company: {a.company or '(set during onboarding)'}",
+        "- Relationship tiers: clients / investors / partners / candidates / press / team",
+        "- Voice fingerprint: concise, direct, warm-professional; short greeting and"
+        " sign-off. Auto-refined from the CEO's real sent mail once a mail connector"
+        " is authorized; until then drafts stay neutral and must be reviewed.",
+        f"- Yes / no rules: {a.redlines or 'Never send, post, or commit externally without explicit approval.'}",
+        "- Authority ceiling: L2 (drafts and proposals). L3 (money/legal/credentials) is manual only.",
+        "- Approval preferences: review drafts in batches; approve sends individually.",
+        "- Current season / priorities: set in memory/north-star.md and standing-concerns.md.",
+        "",
+    ]), encoding="utf-8")
 
 
 def run(cfg: Config, answers: Optional[Answers]) -> Answers:

@@ -113,8 +113,25 @@ def cmd_new_automation(cfg: config.Config, args: argparse.Namespace) -> int:
 def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
     if args.note:
         learn.add_note(cfg, args.note)
+    if args.adopt is not None:
+        if not args.id or not args.playbook:
+            print("Error: --adopt requires --id and --playbook.", file=sys.stderr)
+            return 2
+        try:
+            result = learn.adopt(cfg, args.adopt, args.id, args.playbook,
+                                 staleness=args.staleness, intent=args.intent,
+                                 window=args.window)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        learn.summarize(cfg)
+        print(f"Adopted proposal #{args.adopt} as concern '{result['concern_id']}'.")
+        print(f"  - skill: {result['skill_path']}")
+        print("Run `ernest watch` to put it to work immediately.")
+        return 0
     path = learn.summarize(cfg)
     print("Learn: proposals are candidates only and need CEO approval (L2).")
+    print(f"Adopt one with `ernest learn --adopt <n> --id <id> --playbook <p>`.")
     print(f"  - {path}")
     return 0
 
@@ -152,8 +169,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_na.add_argument("--window")
     p_na.set_defaults(func=cmd_new_automation)
 
-    p_ln = sub.add_parser("learn", help="summarize self-improvement proposals")
-    p_ln.add_argument("--note")
+    p_ln = sub.add_parser("learn", help="summarize / adopt self-improvement proposals")
+    p_ln.add_argument("--note", help="record an observed repetition by hand")
+    p_ln.add_argument("--adopt", type=int, metavar="N",
+                      help="promote proposal #N into a live automation (approval step)")
+    p_ln.add_argument("--id", help="concern id when adopting")
+    p_ln.add_argument("--playbook", help="playbook when adopting")
+    p_ln.add_argument("--staleness")
+    p_ln.add_argument("--intent")
+    p_ln.add_argument("--window")
     p_ln.set_defaults(func=cmd_learn)
     return parser
 

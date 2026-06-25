@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ernest morning brief via launchd. Runs the deterministic engine (no model, no
+  connectors, no auth required), so it works even with no VPS and no open
+  Claude session. Replace $HOME with your absolute home path before loading:
+    launchctl load ~/Library/LaunchAgents/com.notiky.ernest.brief.plist
+-->
 <plist version="1.0">
 <dict>
   <key>Label</key>
@@ -9,7 +15,7 @@
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd "$HOME/.ernest-cc" &amp;&amp; claude -p "/ernest-brief"</string>
+    <string>"$HOME/.ernest-cc/bin/ernest" brief</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>

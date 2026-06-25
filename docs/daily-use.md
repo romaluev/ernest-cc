@@ -11,6 +11,21 @@ aware) and the engine command (deterministic, offline). Use whichever fits.
 | Add automation | `/ernest-new-automation` | `ernest new-automation --id <id> --playbook <p>` |
 | Weekly learning | `/ernest-learn` | `ernest learn` |
 
+## What `watch` covers
+
+A single `ernest watch` (or `/ernest-watch`) runs every enabled concern and
+writes one card per result to `00-Watch/`:
+
+- B2B threads missing your collaborator (add-collaborator)
+- candidates to assign reach-out (candidate-followup)
+- important contacts you owe (account-followup-recovery, tier-scoped)
+- email vs HubSpot list / Google Sheet gaps (list-sync)
+- sourcing targets needing outreach (sourcing-pipeline)
+- open/overdue tasks by owner (task-tracker)
+- dropped follow-ups and inbound prospects
+
+These are remind/assign cards — no drafts unless you ask.
+
 ## Morning
 
 Run:

@@ -102,28 +102,72 @@ def _load_entries(cfg: Config) -> List[Dict[str, object]]:
     return entries
 
 
+def _write_entries(cfg: Config, entries: List[Dict[str, object]]) -> None:
+    cfg.logs_dir.mkdir(parents=True, exist_ok=True)
+    with _proposals_path(cfg).open("w", encoding="utf-8") as fh:
+        for entry in entries:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _slugify(text: str) -> str:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return "-".join(words[:4]) or "automation"
+
+
 def summarize(cfg: Config) -> Path:
     entries = _load_entries(cfg)
+    open_count = sum(1 for e in entries if e.get("status") == "proposed")
     lines = [
         f"# Learning proposals - {cfg.today.isoformat()}",
         "",
-        "These are candidates only. Nothing has been changed.",
-        f"Each needs approval (L2) before becoming a skill or config change.",
-        f"open proposals: {len(entries)}",
+        "These are candidates only. Nothing has been changed automatically.",
+        "Each needs CEO approval (L2) before becoming a skill or config change.",
+        f"open proposals: {open_count} | total recorded: {len(entries)}",
         "",
     ]
     if not entries:
         lines.append("- No proposals captured yet.")
     for n, entry in enumerate(entries, 1):
+        status = entry.get("status", "proposed")
+        suggested_id = _slugify(str(entry.get("observed_pattern", "")))
         lines += [
             f"## {n}. {entry.get('observed_pattern', '')}",
-            f"- status: {entry.get('status', 'proposed')}",
+            f"- status: {status}",
             f"- approval: {entry.get('approval_level', 'L2')} (CEO must approve)",
             f"- target: {entry.get('target', 'ernest-use-case-author')}",
-            f"- next: {entry.get('next_step', '')}",
-            "",
         ]
+        if status == "proposed":
+            lines.append(
+                f"- adopt: `ernest learn --adopt {n} --id {suggested_id} "
+                f"--playbook account-followup-recovery` (or `inbox-prospect-followup`)"
+            )
+        elif status == "adopted":
+            lines.append(f"- adopted as: {entry.get('adopted_as', '')}")
+        lines.append("")
     cfg.logs_dir.mkdir(parents=True, exist_ok=True)
     path = cfg.logs_dir / "learning-summary.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def adopt(cfg: Config, index: int, concern_id: str, playbook: str,
+          staleness: Optional[str] = None, intent: Optional[str] = None,
+          window: Optional[str] = None) -> Dict[str, object]:
+    """Promote a proposal into a live automation. This is the approval step:
+    nothing is applied until the CEO runs it explicitly."""
+    from .automations import scaffold  # local import avoids a cycle
+
+    entries = _load_entries(cfg)
+    if index < 1 or index > len(entries):
+        raise ValueError(f"No proposal #{index}. There are {len(entries)} recorded.")
+    entry = entries[index - 1]
+    description = f"Adopted from learning proposal: {entry.get('observed_pattern', '')}"
+    result = scaffold(cfg, concern_id=concern_id, playbook=playbook,
+                      description=description, staleness=staleness,
+                      intent=intent, window=window)
+    entry["status"] = "adopted"
+    entry["adopted_as"] = concern_id
+    entry["adopted_at"] = _now()
+    _write_entries(cfg, entries)
+    return {"concern_id": concern_id, "skill_path": result["skill_path"],
+            "concern_added": result["concern_added"]}

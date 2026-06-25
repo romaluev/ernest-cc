@@ -1,8 +1,8 @@
 {
   "name": "ernest-cc",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "displayName": "Ernest on Claude Code",
-  "description": "Native Claude Code/Cowork bootstrap for a draft-first CEO operating clone. Works local-only by default and can optionally use a VPS brain.",
+  "description": "Native Claude Code/Cowork bootstrap for a draft-first CEO operating clone. Ships email-centric remind/assign automations (B2B collaborator coverage, candidate follow-up, important-contact recovery, list sync, sourcing, task tracking). Works local-only by default; can optionally use a VPS brain.",
   "author": "Notiky",
   "license": "MIT",
   "entrypoints": {

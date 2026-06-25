@@ -106,6 +106,24 @@ def main() -> int:
         text = summary.read_text()
         check("proposal is proposal-only", "status: proposed" in text.lower())
         check("proposal needs approval", "approval" in text.lower())
+        check("proposal shows an adopt command", "ernest learn --adopt" in text)
+
+    # Self-improvement loop closes only on explicit approval (adopt).
+    adopt = run(profile, vault, "learn", "--adopt", "1", "--id", "partner-renewals",
+                "--playbook", "account-followup-recovery", "--staleness", "7d")
+    check("learn --adopt exits 0", adopt.returncode == 0)
+    check("adopt scaffolded a skill",
+          (profile / "skills" / "partner-renewals" / "SKILL.md").exists())
+    check("adopt registered the concern",
+          "partner-renewals" in (profile / "memory" / "standing-concerns.md").read_text())
+    proposals = (profile / "logs" / "learning-proposals.jsonl").read_text()
+    check("adopted proposal is marked adopted", "\"status\": \"adopted\"" in proposals)
+
+    # The newly adopted automation is live: the next watch run produces its card.
+    watch2 = run(profile, vault, "watch")
+    check("watch (post-adopt) exits 0", watch2.returncode == 0)
+    new_cards = list(watch_dir.glob("partner-renewals--*.md")) if watch_dir.exists() else []
+    check("adopted automation produces a watch card", len(new_cards) >= 1)
 
     if FAILURES:
         print(f"\nFAILED {len(FAILURES)} checks:")

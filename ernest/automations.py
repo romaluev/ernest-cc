@@ -13,7 +13,10 @@ from typing import Optional
 from .concerns import Concern, register
 from .config import Config
 
-_KNOWN_PLAYBOOKS = {"account-followup-recovery", "inbox-prospect-followup"}
+_KNOWN_PLAYBOOKS = {
+    "account-followup-recovery", "inbox-prospect-followup", "add-collaborator",
+    "candidate-followup", "list-sync", "sourcing-pipeline", "task-tracker",
+}
 
 _SKILL_TEMPLATE = """---
 name: {id}

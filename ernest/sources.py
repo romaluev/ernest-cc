@@ -31,6 +31,8 @@ class Thread:
     intent: str = ""
     subject: str = ""
     summary: str = ""
+    category: str = ""
+    participants: List[str] = field(default_factory=list)
     source: str = "local-export"
     origin: str = ""
 
@@ -103,6 +105,8 @@ def _parse_md_thread(path: Path) -> Optional[Thread]:
         intent=header.get("intent", "").lower(),
         subject=header.get("subject", ""),
         summary=body[:280],
+        category=header.get("category", "").lower(),
+        participants=[p.strip() for p in header.get("participants", "").split(",") if p.strip()],
         source=header.get("source", "local-export"),
         origin=str(path),
     )
@@ -125,6 +129,8 @@ def _parse_json_threads(path: Path) -> List[Thread]:
             intent=str(rec.get("intent", "")).lower(),
             subject=str(rec.get("subject", "")),
             summary=" ".join(str(rec.get("summary", rec.get("snippet", ""))).split())[:280],
+            category=str(rec.get("category", "")).lower(),
+            participants=[str(p).strip() for p in rec.get("participants", []) if str(p).strip()],
             source=str(rec.get("source", "local-export")),
             origin=str(path),
         ))

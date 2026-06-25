@@ -13,15 +13,18 @@ from .sources import load_contacts, load_threads
 from .watch import WatchItem, detect
 
 
+def _sort_key(item: WatchItem) -> int:
+    return item.waiting_days if item.waiting_days is not None else -1
+
+
 def compose(cfg: Config) -> Tuple[str, str]:
     """Return (markdown_for_file, short_stdout_summary)."""
     items = detect(cfg)
     threads = load_threads(cfg)
     contacts = load_contacts(cfg)
 
-    needs_you: List[WatchItem] = sorted(
-        items, key=lambda i: i.thread.days_waiting(cfg.today), reverse=True
-    )
+    needs_you: List[WatchItem] = sorted(items, key=_sort_key, reverse=True)
+    followups = sum(1 for i in items if i.waiting_days is not None)
 
     md_lines = [
         f"# Morning brief - {cfg.today.isoformat()}",
@@ -33,10 +36,9 @@ def compose(cfg: Config) -> Tuple[str, str]:
     ]
     if needs_you:
         for item in needs_you:
-            t = item.thread
+            wait = f"waiting {item.waiting_days}d - " if item.waiting_days is not None else ""
             md_lines.append(
-                f"- [{item.concern_id}] {t.contact or 'Unknown'} ({t.company or 'Unknown'}) "
-                f"- waiting {t.days_waiting(cfg.today)}d - {item.suggested_action}"
+                f"- [{item.concern_id}] {item.title} - {wait}{item.suggested_action}"
             )
     else:
         md_lines.append("- Nothing waiting on you. Inbox is clean.")
@@ -44,12 +46,13 @@ def compose(cfg: Config) -> Tuple[str, str]:
         "",
         "## Next step",
         "- Run `ernest draft --concern <id>` to prepare draft-only replies for review.",
+        "- Watch cards in `00-Watch/` list assignments and syncs (remind-only).",
         "",
     ]
 
     summary = (
-        f"Morning brief {cfg.today.isoformat()}: {len(needs_you)} follow-up(s) need you, "
-        f"{len(threads)} open thread(s)."
+        f"Morning brief {cfg.today.isoformat()}: {followups} follow-up(s) need you, "
+        f"{len(needs_you)} open loop(s) across {len(threads)} thread(s)."
     )
     return "\n".join(md_lines), summary
 

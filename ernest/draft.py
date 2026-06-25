@@ -49,7 +49,8 @@ def _draft_block(item: WatchItem) -> str:
 
 
 def collect(cfg: Config, concern_id: Optional[str], contact: Optional[str]) -> List[WatchItem]:
-    items = detect(cfg)
+    # Only thread-backed items are draftable. Assign/sync items are remind-only.
+    items = [i for i in detect(cfg) if i.thread is not None]
     if concern_id:
         items = [i for i in items if i.concern_id == concern_id]
     if contact:
