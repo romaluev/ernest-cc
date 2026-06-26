@@ -35,7 +35,11 @@
     },
     {
       "name": "search_mail",
-      "description": "Search connected mail for thread summaries and source refs."
+      "description": "Search connected mail for thread candidates. Follow with read_mail_thread for full bodies."
+    },
+    {
+      "name": "read_mail_thread",
+      "description": "Read every message in an email thread by thread id. Returns full bodies and participants."
     },
     {
       "name": "create_mail_draft",
@@ -47,7 +51,11 @@
     },
     {
       "name": "search_slack",
-      "description": "Search Slack channels/threads for internal tasks and open promises."
+      "description": "Search Slack for channel/thread candidates. Follow with read_slack_thread for full messages."
+    },
+    {
+      "name": "read_slack_thread",
+      "description": "Read every message in a Slack thread or DM by channel and thread ts."
     }
   ],
   "minimum_health_response": {

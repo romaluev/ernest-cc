@@ -83,6 +83,10 @@ def main() -> int:
 
     check("no draft content in watch cards", "STATUS: DRAFT" not in all_cards)
 
+    slack_card = card("slack-open-threads")
+    check("slack thread card exists", bool(slack_card))
+    check("slack thread flags Jordan", "Jordan" in slack_card)
+
     if FAILURES:
         print(f"\nFAILED {len(FAILURES)} checks:")
         for f in FAILURES:

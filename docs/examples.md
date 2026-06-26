@@ -8,6 +8,8 @@ see [connectors.md](connectors.md). Ernest does **not** use Composio.
 |---|---|
 | Install + first brief | `./install.sh` |
 | Daily | `ernest start` |
+| Read full threads | `ernest read --owed` |
+| Grade inbound + talent | `ernest grade` |
 | Talk to Ernest | open `~/.ernest-cc` in Claude Code |
 
 Most automations are **remind/assign only**. Drafts are optional and never sent
@@ -28,6 +30,70 @@ What needs me today?
 ```
 
 Same as `ernest start`.
+
+---
+
+### Read full threads (email, Slack, etc.)
+
+Ernest needs **message bodies**, not search snippets, before watch or draft.
+
+```bash
+ernest read --owed
+ernest read --thread slack-partnership-deck
+```
+
+```text
+/ernest-read
+
+Read the full Slack thread for the partnership deck and tell me what I owe Jordan.
+```
+
+```text
+Read the full email thread with [contact] before you draft — every message.
+```
+
+Cached threads: `~/ErnestVault/Ernest/00-Threads/`.  
+`ernest start` auto-reads owed threads from exports.
+
+---
+
+### Grade inbound B2B (Tier-1 / Tier-2 / Trash)
+
+Sort inbound so you only personally handle what matters. Criteria live in
+`memory/icp-b2b.md` (AI studios + ad agencies are core ICP).
+
+```bash
+ernest grade --b2b
+```
+
+```text
+/ernest-grade
+
+Triage my inbox. Who's Tier-1 (Fortune 500, agencies, AI studios, enterprise-now,
+big funds, prior contact with me)? Drop the trash. Don't reply yet.
+```
+
+Card: `b2b-grades--<date>.md`, sorted Tier-1 first with reasons + flags.
+
+---
+
+### Grade talent (ex-Skolkovo pool)
+
+Criteria live in `memory/icp-talent.md`.
+
+```bash
+ernest grade --talent
+```
+
+```text
+/ernest-grade
+
+Grade my ex-Skolkovo sourcing list. Tier-1 only if Big Tech senior, strong
+technical base, or AI-media product experience — and likely interested, not a
+current Higgsfield investor/employee.
+```
+
+Card: `talent-grades--<date>.md`.
 
 ---
 
@@ -275,6 +341,39 @@ Nothing applies until you run `--adopt` or approve in Claude.
 
 ---
 
+### Fix something / add a missing tool
+
+Ernest repairs and extends itself — you shouldn't have to debug it.
+
+```bash
+ernest doctor
+```
+
+```text
+/ernest-doctor
+
+Something's off and I can't read my Slack. Figure out what's missing, find the
+right connector, and set it up — ask me before anything that needs my login.
+```
+
+---
+
+### Change the ICP or talent criteria (flexible)
+
+ex-Skolkovo is just the current talent plan. Criteria are living config.
+
+```text
+Change our talent focus from ex-Skolkovo to ex-FAANG design leads, then re-grade.
+```
+
+```text
+Add "Series C+ fintechs" as a Tier-1 B2B signal and re-sort my inbox.
+```
+
+Edits land in `data/grading/*.json`; then `ernest grade` re-runs.
+
+---
+
 ### Onboard (once, optional)
 
 ```text
@@ -316,6 +415,8 @@ Find similar profiles on LinkedIn for partnership outreach. Add top candidates t
 
 | Card id | What it catches |
 |---|---|
+| `b2b-grades` | Inbound B2B sorted Tier-1 / Tier-2 / Trash (`ernest grade`) |
+| `talent-grades` | ex-Skolkovo talent sorted Tier-1 / 2 / 3 (`ernest grade --talent`) |
 | `dropped-followups` | Threads you owe a reply on (recent; daily watch) |
 | `mail-audit` | Full-window owed-reply sweep (on-demand; use `ernest audit`) |
 | `important-followups` | VIP/investor-tier slips |
@@ -325,6 +426,7 @@ Find similar profiles on LinkedIn for partnership outreach. Add top candidates t
 | `korea-list-sync` | Email vs CRM list gaps (any region/segment) |
 | `press-list-sync` | Email vs sheet gaps |
 | `partnership-sourcing` | Pipeline targets not yet contacted |
+| `slack-open-threads` | Slack threads you owe a reply on |
 | `slack-task-tracking` | Open/overdue tasks by owner |
 
 Cards: `~/ErnestVault/Ernest/00-Watch/` after `ernest start`.

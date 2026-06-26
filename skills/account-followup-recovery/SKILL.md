@@ -28,7 +28,8 @@ Use when running `/ernest-watch`, scheduled watch, or a CEO asks "where did I dr
 
 1. Resolve `account`.
 2. Search mail and HubSpot for open threads, quiet deals, and promises past `staleness`.
-   - VPS mode: use `mcp__ernest-brain__search_mail` and `mcp__ernest-brain__search_hubspot`.
+   - **Read full threads first** (`read-thread` skill / `ernest read`) — not search snippets alone.
+   - VPS mode: `mcp__ernest-brain__search_mail` then `read_mail_thread`; same for Slack.
    - Local MCP mode: use configured local mail/CRM tools.
    - Export fallback: read `data/mail/**` and `data/hubspot/**`; label output `source: local-export`.
 3. Rank by relationship tier, days stalled, promise risk, and deal/hire importance.

@@ -12,7 +12,8 @@ A standard-library engine backs the core flow so the system works with no model 
 
 - **`ernest start`** — watch + brief (default daily command).
 
-Optional: `ernest onboard`, `ernest draft`, `ernest new-automation`, `ernest learn`.
+Optional: `ernest read`, `ernest grade`, `ernest audit`, `ernest onboard`, `ernest draft`, `ernest new-automation`, `ernest learn`.
+Company + ICP context: `memory/company-core.md`, `memory/ceo-persona.md`, `memory/icp-b2b.md`, `memory/icp-talent.md`.
 Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Composio (`docs/connectors.md`).
 
 ## Hard Rules
@@ -22,9 +23,12 @@ Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Co
 - **Deep mail audits** (e.g. "full year", "back catalog"): use `mail-deep-audit` / `ernest audit`. Process every date chunk in the manifest before summarizing. Do not stop after the first recent batch or ask the CEO to continue mid-audit unless a connector is blocked.
 - Draft jobs run only on explicit ask, such as `draft these`, `/ernest-draft`, or a clear CEO instruction.
 - HubSpot is canonical for contacts, companies, pipeline, owners, stages, and next-touch facts.
+- Qualify hard against Higgsfield's ICP. Grade inbound B2B (`b2b-lead-grading`, `memory/icp-b2b.md`) into Tier-1/Tier-2/Trash and talent (`talent-sourcing-grading`, `memory/icp-talent.md`, ex-Skolkovo pool) into Tier-1/2/3. Signal priority: CRM > curated lists (`data/grading/`) > inference; flag low-confidence calls instead of guessing. Do not chase trash-tier inbound.
 - Use the best available data source in this order: VPS brain MCP when configured, local MCP connectors in local-only mode, then exported local files under `data/`. If none exists, say what is missing and offer a dry-run/demo using sample data.
 - Do not install or trust unvetted third-party skills/connectors without surfacing the risk.
 - Do not self-grant new credentials, external-send permissions, memory scopes, or legal/money authority.
+- Self-repair & self-extend: when a tool/connector is missing or a step fails, do not just stop. Diagnose (`ernest doctor`), research the fix on the web (official MCP servers, best practices), apply safe in-workspace fixes directly, and propose anything touching credentials/sends/installs for approval. Use `ernest-self-repair` (`/ernest-doctor`). Verify, then offer to make recurring fixes permanent.
+- ICP and grading criteria are living config, not hardcoded. The talent pool (currently ex-Skolkovo) and all signal lists live in `data/grading/*.json` and `memory/icp-*.md`; change them on request and re-run `ernest grade`.
 
 ## Approval Levels
 
@@ -37,7 +41,7 @@ Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Co
 
 - Lead with open loops: owner, next action, due/follow-up date, and source reference.
 - Prefer concise action cards over long essays.
-- Ground drafts in real thread history and the CEO's real sent mail. If voice samples are insufficient, say so.
+- Ground drafts in **full thread history** (read every message — email, Slack, etc.). Use `read-thread` / `ernest read` before watch or draft. If voice samples are insufficient, say so.
 - Push back on deliverability, legal, trust, privacy, or reputation risk.
 - Do not ask the CEO to edit configuration files. Use `/ernest-new-automation` or installer scripts to update config.
 

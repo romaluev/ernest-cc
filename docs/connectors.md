@@ -30,12 +30,16 @@ Pick one per app. Mixing is fine (e.g. live Gmail MCP + exported HubSpot list).
 Each connector is a standard MCP server — not a generic action router:
 
 ```text
-mcp__gmail__search_threads      read
+mcp__gmail__search_threads      find candidates
+mcp__gmail__get_thread          read full email thread (required after search)
 mcp__gmail__create_draft        draft (allowed)
 mcp__gmail__send_email          blocked by gate until CEO approves
+mcp__slack__get_thread          read full Slack thread / replies
 ```
 
-Same pattern for HubSpot, Slack, Google Sheets, Calendar, etc.
+Same pattern for HubSpot, Slack, Google Sheets, Calendar, Teams, etc. **Search
+finds; read loads the full conversation.**
+
 
 **How to add:**
 
@@ -50,7 +54,8 @@ the active config to `~/.ernest-cc/.mcp.json`.
 
 | Automation | Offline (`data/`) | Live (native MCP) |
 |---|---|---|
-| Dropped follow-ups | `data/mail/` | Gmail / Outlook MCP |
+| Dropped follow-ups | `data/mail/` (full threads) | Gmail MCP: search + **get_thread** |
+| Slack owed replies | `data/slack/threads/` | Slack MCP: search + **get_thread** |
 | Important contacts (tier) | mail + `data/hubspot/` | Mail + HubSpot MCP |
 | Add collaborator to threads | mail with `participants` | Mail MCP |
 | Candidate follow-up | mail with `category: candidate` | Mail MCP |

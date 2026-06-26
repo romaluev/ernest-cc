@@ -37,6 +37,11 @@ def test_live_connector_mutations_are_blocked() -> None:
 
 def test_reads_and_drafts_are_allowed() -> None:
     for tool in [
+        "mcp__gmail__get_thread",
+        "mcp__gmail__read_thread",
+        "mcp__ernest-brain__read_mail_thread",
+        "mcp__ernest-brain__read_slack_thread",
+        "mcp__slack__get_thread",
         "mcp__gmail__search_threads",
         "mcp__gmail__create_draft",
         "mcp__hubspot__list_contacts",

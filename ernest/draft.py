@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from .concerns import load as load_concerns
 from .config import Config, ensure_dirs
-from .sources import Thread
+from .thread_reader import load_one as load_conversation
 from .watch import WatchItem, detect
 
 
@@ -21,27 +21,37 @@ def _first_name(contact: str) -> str:
     return (contact or "there").split()[0] if contact else "there"
 
 
-def _draft_body(item: WatchItem) -> str:
+def _draft_body(cfg: Config, item: WatchItem) -> str:
     t = item.thread
+    context = t.summary or "Picking this back up on our side."
+    conv = load_conversation(cfg, t.id)
+    if conv:
+        last = conv.last_inbound()
+        if last and last.body:
+            snippet = " ".join(last.body.split())[:200]
+            context = snippet + ("…" if len(last.body) > 200 else "")
     return (
         f"Hi {_first_name(t.contact)},\n\n"
         f"Following up on your note from {t.last_inbound} - thanks for your patience. "
-        f"{t.summary or 'Picking this back up on our side.'}\n\n"
+        f"Re: {context}\n\n"
         f"Happy to move this forward. Does a short call this week work, or shall I send details over email?\n\n"
         f"Best,\nSam"
     )
 
 
-def _draft_block(item: WatchItem) -> str:
+def _draft_block(cfg: Config, item: WatchItem) -> str:
     t = item.thread
+    conv = load_conversation(cfg, t.id)
+    thread_ref = f"thread: {t.id} ({conv.message_count} messages read)" if conv and conv.message_count else f"thread: {t.id}"
     return "\n".join([
         f"## To: {t.contact or 'Unknown'} ({t.company or 'Unknown'})",
         "STATUS: DRAFT - not sent. Review, then approve a send through a connector.",
         f"source: {t.source}",
+        thread_ref,
         f"context: inbound {t.last_inbound} - {item.reason}",
         f"subject: Re: {t.subject or 'Following up'}",
         "",
-        _draft_body(item),
+        _draft_body(cfg, item),
         "",
         "---",
         "",
@@ -75,7 +85,7 @@ def run(cfg: Config, concern_id: Optional[str] = None,
         f"drafts: {len(items)}",
         "",
     ]
-    blocks = [_draft_block(item) for item in items]
+    blocks = [_draft_block(cfg, item) for item in items]
     path = cfg.drafts_dir / f"{label}--{cfg.today.isoformat()}.md"
     path.write_text("\n".join(header) + "\n" + "\n".join(blocks), encoding="utf-8")
     return path

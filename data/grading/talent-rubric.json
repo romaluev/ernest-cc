@@ -1,0 +1,53 @@
+{
+  "_comment": "Editable talent grading rubric for the ex-Skolkovo pool (and general candidates). Signal priority: ATS/CRM > these lists > inference. 'Likely interested' is always a human-flagged judgment call.",
+  "pool": "ex-Skolkovo",
+  "tier1": {
+    "big_tech": [
+      "google", "alphabet", "meta", "facebook", "instagram", "apple", "amazon",
+      "microsoft", "nvidia", "openai", "anthropic", "netflix", "uber", "airbnb",
+      "snap", "snapchat", "tiktok", "bytedance", "stripe", "tesla", "linkedin"
+    ],
+    "senior_titles": [
+      "team lead", "tech lead", "lead", "head of", "director", "vp", "vice president",
+      "principal", "staff", "chief", "cto", "cpo", "ceo", "founder", "co-founder",
+      "engineering manager", "group product manager"
+    ],
+    "tier1_countries": [
+      "united states", "usa", " us ", "u.s.", "uk", "united kingdom", "canada",
+      "germany", "france", "singapore", "switzerland", "netherlands", "sweden",
+      "australia", "israel", "ireland", "japan"
+    ],
+    "ai_media_models": [
+      "stable diffusion", "sdxl", "sora", "runway", "midjourney", "flux", "veo",
+      "kling", "pika", "comfyui", "diffusion", "gan", "nerf", "gaussian splatting",
+      "text-to-video", "text-to-image", "image generation", "video generation",
+      "generative video", "generative media"
+    ],
+    "strong_tech_keywords": [
+      "machine learning", "deep learning", "ml engineer", "research scientist",
+      "computer vision", "phd", "icpc", "kaggle", "distributed systems",
+      "infrastructure", "backend at scale"
+    ],
+    "commercial_keywords": [
+      "b2b", "b2c", "enterprise sales", "head of sales", "vp sales",
+      "scaled revenue", "grew revenue", "commercial lead", "0 to 1", "scaled to"
+    ]
+  },
+  "tier2": {
+    "us_startup_signals": [
+      "y combinator", "yc ", "(yc", "series a", "series b", "seed-stage",
+      "san francisco", "bay area", "silicon valley", "startup"
+    ],
+    "product_gtm_keywords": [
+      "product manager", "product lead", "go-to-market", "gtm", "growth",
+      "sales lead", "partnerships", "business development", "bizdev"
+    ]
+  },
+  "exclusions": {
+    "current_company": ["higgsfield"],
+    "investor_terms": [
+      "higgsfield investor", "invested in higgsfield", "limited partner in higgsfield",
+      "angel in higgsfield", "backs higgsfield"
+    ]
+  }
+}

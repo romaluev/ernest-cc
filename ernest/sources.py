@@ -95,6 +95,14 @@ def _parse_md_thread(path: Path) -> Optional[Thread]:
     if not header:
         return None
     body = " ".join("\n".join(lines[body_start:]).split())
+    summary = body[:280]
+    try:
+        from .thread_reader import parse_markdown
+        conv = parse_markdown(path)
+        if conv and conv.message_count:
+            summary = conv.excerpt(280) or summary
+    except ImportError:
+        pass
     return Thread(
         id=path.stem,
         contact=header.get("contact", ""),
@@ -104,7 +112,7 @@ def _parse_md_thread(path: Path) -> Optional[Thread]:
         status=header.get("status", ""),
         intent=header.get("intent", "").lower(),
         subject=header.get("subject", ""),
-        summary=body[:280],
+        summary=summary,
         category=header.get("category", "").lower(),
         participants=[p.strip() for p in header.get("participants", "").split(",") if p.strip()],
         source=header.get("source", "local-export"),
@@ -138,20 +146,32 @@ def _parse_json_threads(path: Path) -> List[Thread]:
 
 
 def load_threads(cfg: Config) -> List[Thread]:
-    mail_dir = cfg.data_dir / "mail"
-    if not mail_dir.is_dir():
-        return []
+    from .thread_reader import conversation_to_thread, load_all
+
     threads: List[Thread] = []
-    for path in sorted(mail_dir.iterdir()):
-        try:
-            if path.suffix.lower() == ".md":
-                thread = _parse_md_thread(path)
-                if thread:
-                    threads.append(thread)
-            elif path.suffix.lower() == ".json":
-                threads.extend(_parse_json_threads(path))
-        except (OSError, ValueError, json.JSONDecodeError):
+    seen: set[str] = set()
+    mail_dir = cfg.data_dir / "mail"
+    if mail_dir.is_dir():
+        for path in sorted(mail_dir.iterdir()):
+            try:
+                if path.suffix.lower() == ".md":
+                    thread = _parse_md_thread(path)
+                    if thread:
+                        threads.append(thread)
+                        seen.add(thread.id)
+                elif path.suffix.lower() == ".json":
+                    for thread in _parse_json_threads(path):
+                        threads.append(thread)
+                        seen.add(thread.id)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+    for conv in load_all(cfg).values():
+        if conv.thread_id in seen:
             continue
+        if conv.message_count == 0:
+            continue
+        threads.append(conversation_to_thread(conv))
+        seen.add(conv.thread_id)
     return threads
 
 

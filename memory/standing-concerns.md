@@ -63,6 +63,8 @@ concerns:
       target_key: "outlet"
       list_name: "Press tracker sheet"
 
+  # Partnership + ex-Skolkovo talent sourcing. Talent rows (purpose=hire) are
+  # auto-graded Tier-1/2/3; run `ernest grade --talent` for a dedicated card.
   - id: partnership-sourcing
     playbook: sourcing-pipeline
     enabled: true
@@ -83,6 +85,14 @@ concerns:
       account: "*"
       staleness: "3d"
       include: "promises"
+
+  - id: slack-open-threads
+    playbook: account-followup-recovery
+    enabled: true
+    params:
+      account: "*"
+      staleness: "1d"
+      channel: "slack"
 
   # On-demand only — run via `ernest audit --window 365d` + /ernest-audit in Claude.
   # Not part of daily `ernest start` (too heavy for ambient watch).

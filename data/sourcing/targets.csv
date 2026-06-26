@@ -1,4 +1,7 @@
-name,linkedin,purpose,status,note
-Target Alpha,https://www.linkedin.com/in/example-alpha,partnership,new,partnership prospect
-Target Beta,https://www.linkedin.com/in/example-beta,hire,new,operator prospect
-Target Closed,https://www.linkedin.com/in/example-contacted,partnership,contacted,already reached out
+name,linkedin,purpose,status,note,company,title,profile
+Target Alpha,https://www.linkedin.com/in/example-alpha,partnership,new,partnership prospect,,,
+Target Beta,https://www.linkedin.com/in/example-beta,hire,new,operator prospect,,,
+Target Closed,https://www.linkedin.com/in/example-contacted,partnership,contacted,already reached out,,,
+Dmitry Volkov,https://www.linkedin.com/in/example-volkov,hire,new,ex-Skolkovo; strong fit,Google,Engineering Lead,"ex-Skolkovo resident. Engineering Lead at Google in the United States. Deep machine learning and computer vision background; shipped generative video features."
+Marina Petrova,https://www.linkedin.com/in/example-petrova,hire,new,ex-Skolkovo; GTM,Stripe,Product Manager,"ex-Skolkovo. Product Manager at Stripe, US startup experience, go-to-market focus. No AI media model work yet."
+Sergei Orlov,https://www.linkedin.com/in/example-orlov,hire,new,ex-Skolkovo; thin profile,LocalCo,Analyst,"ex-Skolkovo. Analyst at a small local company. No Big Tech, no startup, no AI media experience listed."

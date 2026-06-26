@@ -10,6 +10,8 @@
     ernest new-automation --id ...     register a concern + scaffold a skill
     ernest learn [--note "..."]        summarize self-improvement proposals
     ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
+    ernest read [--owed] [--thread ID] cache full thread bodies to vault
+    ernest grade [--b2b] [--talent]    tier inbound leads + talent (ICP rubrics)
 
 Local-first: every command works with no VPS and no live connectors, reading
 exported data under `data/`. Nothing here ever sends.
@@ -22,7 +24,8 @@ import sys
 from pathlib import Path
 
 from . import __version__, config
-from . import automations, audit, brief, concerns, draft, learn, onboard, watch
+from . import (automations, audit, brief, concerns, draft, grade_run, learn,
+               onboard, read_threads, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -33,6 +36,39 @@ def _connectors(cfg: config.Config) -> list[str]:
     except (OSError, json.JSONDecodeError):
         return []
     return sorted(data.get("mcpServers", {}).keys())
+
+
+def _diagnostics(cfg: config.Config) -> list[tuple[str, str]]:
+    """Soft checks: (problem, how-to-fix). Never fail the health gate on these —
+    they feed the self-repair skill so Ernest (or any user) can fix things."""
+    issues: list[tuple[str, str]] = []
+
+    for name in ("icp-b2b.md", "icp-talent.md"):
+        if not (cfg.memory_dir / name).is_file():
+            issues.append((f"ICP rubric memory missing: {name}",
+                           "Restore from repo or run `./install.sh --refresh`."))
+    for rel in ("grading/b2b-rubric.json", "grading/talent-rubric.json"):
+        if not (cfg.data_dir / rel).is_file():
+            issues.append((f"Grading rubric missing: data/{rel}",
+                           "Restore the file or `./install.sh --refresh`; engine "
+                           "falls back to built-in defaults meanwhile."))
+    mail = cfg.data_dir / "mail"
+    if not mail.is_dir() or not any(mail.iterdir()):
+        issues.append(("No mail to read (data/mail is empty).",
+                       "Drop exports in data/mail/ or connect a mail MCP "
+                       "(docs/connectors.md). Then `ernest read --owed`."))
+    if not _connectors(cfg):
+        issues.append(("No MCP connectors configured (running on local exports).",
+                       "To go live, add a connector. Ask Ernest: /ernest-doctor "
+                       "(it can research and propose the right MCP server)."))
+    for mod in ("ernest.watch", "ernest.grading", "ernest.read_threads", "ernest.audit"):
+        try:
+            __import__(mod)
+        except Exception as exc:  # noqa: BLE001 - report any import breakage
+            issues.append((f"Engine module failed to import: {mod} ({exc})",
+                           "Run `/ernest-doctor` to diagnose and repair, or "
+                           "`./install.sh --refresh`."))
+    return issues
 
 
 def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
@@ -48,7 +84,17 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     print(f"active concerns: {', '.join(enabled) or '(none)'}")
     if missing:
         print(f"missing memory files: {', '.join(missing)}")
+        print("fix: restore them or run `./install.sh --refresh`.")
         return 1
+    issues = _diagnostics(cfg)
+    if issues:
+        print(f"\ndiagnostics: {len(issues)} thing(s) to improve (not fatal):")
+        for problem, fix in issues:
+            print(f"  - {problem}\n    fix: {fix}")
+        print("\nself-repair: run `/ernest-doctor` in Claude to auto-diagnose, "
+              "research missing tools, and propose fixes (approval-gated).")
+    else:
+        print("\ndiagnostics: all clear.")
     return 0
 
 
@@ -66,7 +112,12 @@ def cmd_onboard(cfg: config.Config, args: argparse.Namespace) -> int:
 
 
 def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
+    try:
+        read_threads.run(cfg, owed_only=True)
+    except ValueError:
+        pass
     cards = watch.run(cfg)
+    grade_run.run(cfg)
     path, summary = brief.run(cfg)
     print(summary)
     if cards:
@@ -119,6 +170,35 @@ def cmd_new_automation(cfg: config.Config, args: argparse.Namespace) -> int:
         print(f"Registered concern '{args.id}' and scaffolded a skill.")
     print(f"  - skill: {result['skill_path']}")
     print("Run `ernest watch` to pick it up immediately.")
+    return 0
+
+
+def cmd_read(cfg: config.Config, args: argparse.Namespace) -> int:
+    try:
+        paths = read_threads.run(
+            cfg,
+            thread_id=args.thread,
+            concern_id=args.concern,
+            owed_only=args.owed or (not args.thread and not args.concern),
+        )
+    except ValueError as exc:
+        print(f"Read: {exc}", file=sys.stderr)
+        return 1
+    print(f"Read: cached {len(paths)} thread(s) to 00-Threads/")
+    for path in paths:
+        print(f"  - {path}")
+    return 0
+
+
+def cmd_grade(cfg: config.Config, args: argparse.Namespace) -> int:
+    both = not args.b2b and not args.talent
+    paths = grade_run.run(cfg, b2b=args.b2b or both, talent=args.talent or both)
+    if not paths:
+        print("Grade: no leads or talent rows to grade. Add data/mail or sourcing rows.")
+        return 0
+    print(f"Grade: wrote {len(paths)} tier card(s), sorted Tier-1 first.")
+    for path in paths:
+        print(f"  - {path}")
     return 0
 
 
@@ -211,6 +291,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_au.add_argument("--chunk-days", type=int, default=30, dest="chunk_days",
                       help="days per MCP search bucket (default 30)")
     p_au.set_defaults(func=cmd_audit)
+
+    p_rd = sub.add_parser("read", help="cache full thread bodies (email, Slack, etc.)")
+    p_rd.add_argument("--thread", help="single thread id")
+    p_rd.add_argument("--concern", help="threads from a watch concern id")
+    p_rd.add_argument("--owed", action="store_true",
+                      help="threads you owe a reply on (default when no --thread)")
+    p_rd.set_defaults(func=cmd_read)
+
+    p_gr = sub.add_parser("grade", help="tier inbound leads + talent against ICP rubrics")
+    p_gr.add_argument("--b2b", action="store_true", help="grade B2B leads only")
+    p_gr.add_argument("--talent", action="store_true", help="grade talent only")
+    p_gr.set_defaults(func=cmd_grade)
     return parser
 
 

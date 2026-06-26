@@ -68,5 +68,6 @@ def load() -> Config:
 
 
 def ensure_dirs(cfg: Config) -> None:
-    for path in (cfg.watch_dir, cfg.daily_dir, cfg.drafts_dir, cfg.logs_dir):
+    for path in (cfg.watch_dir, cfg.daily_dir, cfg.drafts_dir, cfg.logs_dir,
+                 cfg.vault_dir / "Ernest" / "00-Threads"):
         path.mkdir(parents=True, exist_ok=True)

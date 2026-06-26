@@ -17,7 +17,11 @@ version: 1.0.0
 | `list-sync` | `list-sync` | Email vs CRM or sheet | assign |
 | `sourcing-pipeline` | `sourcing-pipeline` | Pipeline targets to contact | assign |
 | `slack-task-tracker` | `task-tracker` | Open/overdue tasks by owner | assign |
+| `read-thread` | (read) | Full thread bodies before watch/draft | read |
+| `b2b-lead-grading` | (grade) | Tier inbound B2B (Tier-1/2/Trash) | grade |
+| `talent-sourcing-grading` | (grade) | Tier talent, ex-Skolkovo pool | grade |
 | `ernest-watch` | (orchestration) | Run all concerns | remind |
+| `ernest-self-repair` | (meta) | Diagnose + fix/extend Ernest itself | repair |
 | `ernest-use-case-author` | (meta) | Propose new automations | proposal |
 
 ## Routing
@@ -30,7 +34,11 @@ version: 1.0.0
 - Email vs list → `list-sync`
 - Sourcing list → `sourcing-pipeline`
 - Task ownership → `slack-task-tracker`
-- Daily overview → `morning-brief` / `ernest start`
+- Full thread read (email/Slack) → `read-thread` / `ernest read`
+- Triage/qualify inbound B2B → `b2b-lead-grading` / `ernest grade --b2b`
+- Qualify candidates (ex-Skolkovo) → `talent-sourcing-grading` / `ernest grade --talent`
+- Something broken / tool missing / "fix it" → `ernest-self-repair` / `/ernest-doctor`
 - New automation → `ernest-use-case-author` or `ernest new-automation`
+- Change ICP / grading / talent pool → edit `data/grading/*.json` + `memory/icp-*.md`, re-run `ernest grade`
 
 Prompts: `docs/examples.md`. Connectors: `docs/connectors.md` (native MCP; no Composio).

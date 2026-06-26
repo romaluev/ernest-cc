@@ -39,6 +39,9 @@ If using exported files, label every item `source: local-export`. If no real dat
 
 ## Run Sequence
 
+0. **Read threads** — run `ernest read --owed` or `/ernest-read` so watch/draft use full
+   message bodies (email, Slack, etc.), not metadata alone.
+
 1. Parse enabled `concerns`.
 2. For each concern, load the named playbook and run only its Watch half.
 3. Write one card per non-empty result to the configured watch card directory or `mcp__ernest-brain__write_watch_card`.

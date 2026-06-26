@@ -45,15 +45,27 @@ class WatchItem:
     detail: str = ""
     waiting_days: Optional[int] = None
     thread: Optional[Thread] = None
+    tier: str = ""
+    tier_rank: int = 9
 
 
 def _company_tier_map(cfg: Config) -> Dict[str, str]:
     return {c.company.lower(): c.tier.lower() for c in load_contacts(cfg) if c.company}
 
 
+def _b2b_tier(cfg: Config, t: Thread, crm_tier: str = "", prior: bool = False):
+    from .grading import grade_b2b
+    return grade_b2b(
+        company=t.company, contact=t.contact,
+        text=" ".join(filter(None, [t.subject, t.summary, t.status, t.intent])),
+        category=t.category, crm_tier=crm_tier, prior_contact=prior, cfg=cfg,
+    )
+
+
 def _account_followup(concern: Concern, threads: List[Thread], cfg: Config) -> List[WatchItem]:
     staleness = _days_param(concern.params.get("staleness", ""), 7)
     window = _days_param(concern.params.get("window", ""), 0)
+    channel = concern.params.get("channel", "").strip().lower()
     account = concern.params.get("account", "*").strip()
     tiers = {t.lower() for t in _csv_list(concern.params.get("priority_tiers", ""))}
     tier_map = _company_tier_map(cfg) if tiers else {}
@@ -64,17 +76,22 @@ def _account_followup(concern: Concern, threads: List[Thread], cfg: Config) -> L
             continue
         if window and waiting > window:
             continue
+        if channel and t.category != channel:
+            continue
         if account not in ("", "*") and account.lower() not in (t.company + " " + t.contact).lower():
             continue
         if tiers and tier_map.get(t.company.lower(), "") not in tiers:
             continue
         scope = "important " if tiers else ""
+        grade = _b2b_tier(cfg, t, crm_tier=tier_map.get(t.company.lower(), ""))
         items.append(WatchItem(
-            concern.id, f"{t.contact or 'Unknown'} - {t.company or 'Unknown'}",
+            concern.id, f"[{grade.tier.upper()}] {t.contact or 'Unknown'} - {t.company or 'Unknown'}",
             f"Inbound {waiting}d ago with no reply (threshold {staleness}d).",
             f"Reply to this {scope}contact to keep the thread alive.",
             detail=t.summary or t.status, waiting_days=waiting, thread=t,
+            tier=grade.tier, tier_rank=grade.rank,
         ))
+    items.sort(key=lambda i: (i.tier_rank, -(i.waiting_days or 0)))
     return items
 
 
@@ -175,12 +192,23 @@ def _sourcing_pipeline(concern: Concern, threads: List[Thread], cfg: Config) -> 
             link = (row.get("linkedin") or "").strip()
             note = (row.get("note") or "").strip()
             row_purpose = (row.get("purpose") or purpose).strip()
+            tier = ""
+            tier_rank = 9
+            if row_purpose.lower() in ("hire", "talent"):
+                from .grading import grade_talent
+                g = grade_talent(name=name, profile=row.get("profile", "") or note,
+                                 company=row.get("company", ""), title=row.get("title", ""),
+                                 cfg=cfg)
+                tier, tier_rank = g.tier, g.rank
+            label = f"[{tier.upper()}] {name or 'Target'} ({row_purpose})" if tier else f"{name or 'Target'} ({row_purpose})"
             items.append(WatchItem(
-                concern.id, f"{name or 'Target'} ({row_purpose})",
+                concern.id, label,
                 f"Sourced {row_purpose} target not yet contacted.",
-                "Review and assign outreach.",
+                "Review and assign outreach." if tier_rank < 2 else "Likely skip (Tier-3); confirm before discarding.",
                 detail=" - ".join(p for p in (link, note) if p),
+                tier=tier, tier_rank=tier_rank,
             ))
+    items.sort(key=lambda i: i.tier_rank)
     return items
 
 
@@ -252,6 +280,8 @@ def _card(cfg: Config, concern_id: str, items: List[WatchItem]) -> str:
     ]
     for n, item in enumerate(items, 1):
         lines.append(f"## {n}. {item.title}")
+        if item.tier:
+            lines.append(f"- tier: {item.tier}")
         if item.waiting_days is not None:
             lines.append(f"- waiting: {item.waiting_days}d")
         lines += [
@@ -260,6 +290,8 @@ def _card(cfg: Config, concern_id: str, items: List[WatchItem]) -> str:
         ]
         if item.detail:
             lines.append(f"- context: {item.detail}")
+        if item.thread is not None:
+            lines.append(f"- thread_id: {item.thread.id}")
         lines.append("")
     return "\n".join(lines)
 

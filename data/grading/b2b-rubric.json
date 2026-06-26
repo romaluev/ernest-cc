@@ -1,0 +1,53 @@
+{
+  "_comment": "Editable B2B grading rubric. Signal priority: CRM tier > these lists > inference. Extend the lists; the skill uses public knowledge for anything not listed and flags low confidence.",
+  "crm_tier_map": {
+    "vip": "tier-1",
+    "enterprise": "tier-1",
+    "investor": "tier-1",
+    "strategic": "tier-1",
+    "partner": "tier-2",
+    "smb": "tier-2"
+  },
+  "tier1": {
+    "categories": [
+      "ai studio", "ai-studio", "creative studio", "ad agency", "advertising agency",
+      "creative agency", "media agency", "marketing agency", "model provider",
+      "cloud provider", "enterprise"
+    ],
+    "providers": [
+      "openai", "anthropic", "google deepmind", "deepmind", "mistral", "cohere",
+      "aws", "amazon web services", "azure", "microsoft azure", "google cloud",
+      "gcp", "nvidia", "oracle cloud", "coreweave"
+    ],
+    "companies": [
+      "google", "microsoft", "amazon", "apple", "meta", "nvidia", "netflix",
+      "coca-cola", "pepsico", "nike", "adidas", "unilever", "procter & gamble",
+      "l'oreal", "samsung", "disney", "warner bros", "publicis", "wpp", "omnicom",
+      "dentsu", "interpublic", "accenture", "deloitte", "mckinsey"
+    ],
+    "people": [
+      "harry stebbings", "ilya sutskever"
+    ],
+    "intent_keywords": [
+      "enterprise", "procurement", "rollout", "roll out", "buy now", "purchase now",
+      "contract", "msa", "master service agreement", "seats", "deploy across",
+      "company-wide", "annual plan", "enterprise plan", "po ", "purchase order",
+      "rfp", "rfi", "pilot for", "sign this quarter"
+    ],
+    "reputation_keywords": [
+      "spoke with alex", "talked with alex", "met alex", "alex suggested",
+      "alex mashrabov", "as discussed with alex"
+    ],
+    "fund_aum_threshold_busd": 2.0
+  },
+  "trash": {
+    "vendor_keywords": [
+      "we offer", "our agency can", "boost your", "guest post", "backlink",
+      "seo services", "link building", "we can help you rank", "cold email tool",
+      "lead generation service", "increase your traffic", "press release distribution",
+      "we'd love to feature you for", "sponsored post opportunity"
+    ],
+    "small_media_reader_threshold": 100000,
+    "small_media_keywords": ["newsletter", "blog", "small publication", "growing audience"]
+  }
+}

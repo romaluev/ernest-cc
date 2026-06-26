@@ -52,6 +52,36 @@ reminder or draft instead. See [security.md](security.md).
 git pull --ff-only && ./install.sh --refresh
 ```
 
+## Something's broken or a tool is missing — let Ernest fix it
+
+Ernest is built to repair and extend itself. Run:
+
+```bash
+ernest doctor
+```
+
+It prints a `diagnostics:` block with a `fix:` for each issue. For an automatic
+pass, in Claude run:
+
+```text
+/ernest-doctor
+```
+
+Ernest will diagnose, research the right tool/MCP server on the web, apply safe
+in-workspace fixes, and propose anything that needs your approval (connectors,
+credentials, installs). It verifies with `ernest doctor` and can make a recurring
+fix permanent as a skill or automation.
+
+## Change the ICP / grading / talent pool
+
+Criteria are living config — not hardcoded. Edit `data/grading/b2b-rubric.json`
+or `data/grading/talent-rubric.json` (e.g. the talent `pool`, company lists,
+Tier-1 countries), or just tell Ernest "change our talent focus to X". Re-run:
+
+```bash
+ernest grade
+```
+
 ## Cowork differs from Claude Code
 
 Use Claude Code as the bootstrap surface. Same plugin; verify connectors on your build.
