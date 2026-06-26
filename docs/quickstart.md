@@ -6,7 +6,7 @@ Two ways in. Most people want the first one.
 
 Best for Cowork or the Claude desktop/Code app. Nothing to download by hand.
 
-1. **Add Ernest.** In Claude, open the plugin browser (the **+** button, or type `/`)
+1. **Add Ernest.** In Claude, open the plugin browser (the **+** button)
    → add the Ernest marketplace → **install `ernest-cc`**.
    *(One-time: if asked for the marketplace, it's `romaluev/ernest-cc`.)*
 2. **Set it up by talking.** Run **`/ernest-setup`**. Ernest asks ~5 plain questions

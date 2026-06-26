@@ -15,7 +15,7 @@ flowchart LR
     E -- watches --> world["Your inbox · CRM · Slack · calendar · calls"]
     world -- "what needs you" --> E
     E -- "remind / draft / prep" --> you
-    E -- "learns your taste" --> mem[(Memory — yours, local)]
+    E -- "learns your taste" --> mem[("Memory — yours, local")]
     mem -- "sharper next time" --> E
     E -. "grows new skills" .-> lib[[Skill library]]
     lib -. "self-improves" .-> E
@@ -90,12 +90,12 @@ flowchart TB
     end
     subgraph MEM["Axis 2 · Memory"]
       O["Obsidian vault as your second brain"]
-      SM["Supermemory / vector recall<br/>behind the brain contract"]
+      SM["Vector recall layer (future)<br/>behind the brain contract"]
     end
     subgraph ABIL["Axis 3 · Abilities"]
       C["More connectors (Gmail, HubSpot, Slack, Fireflies, Clay…)"]
       S["More skills (self-grown + curated)"]
-      MA["Sub-agents: a watcher, a drafter, a researcher"]
+      MA["Sub-agents: a watcher + a drafter (add more)"]
     end
     L --> V
     L --> O
@@ -110,14 +110,14 @@ flowchart TB
   on the server (the laptop holds only a key). Local and VPS stay in sync and cover
   each other. Detach anytime, fully local again.
 - **Memory** — your memory is already plain Markdown laid out as an **Obsidian
-  vault** (`~/ErnestVault/Ernest/…`). Point Obsidian at it and you have a navigable
-  second brain — exactly the "everything in one vault" idea Karpathy talks about.
-  Want recall over thousands of notes/threads? Plug a **supermemory / vector layer**
-  behind the same brain contract (`brain/ernest-brain.contract.json`) without
-  changing a single skill.
+  vault** (`~/ErnestVault/Ernest/…`). Point Obsidian at it and you have one
+  navigable second brain for everything Ernest learns. Later, if you want recall
+  over thousands of notes/threads, you could plug a **vector-search layer** behind
+  the same brain contract (`brain/ernest-brain.contract.json`) without changing a
+  single skill. *(That layer is a future add-on, not shipped today.)*
 - **Abilities** — connectors are a swappable layer; skills are the unit of
   automation and Ernest grows its own; and heavy jobs can fan out to focused
-  sub-agents (one watches, one drafts, one researches).
+  sub-agents (today: a **watcher** and a **drafter** — add your own).
 
 ---
 
