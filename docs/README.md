@@ -8,6 +8,7 @@ sends anything on its own. Local-first: your memory stays on your machine.
 
 | If you want to… | Read |
 |---|---|
+| **See what's possible** (vision, diagrams, ideas to try) | [vision.md](vision.md) |
 | **Get started** (in Claude, no terminal) | [quickstart.md](quickstart.md) |
 | **Understand how it works** (2 min, with diagrams) | [how-it-works.md](how-it-works.md) |
 | **Use it day to day** | [daily-use.md](daily-use.md) |
