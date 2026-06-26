@@ -20,6 +20,12 @@ version: 1.0.0
 | `read-thread` | (read) | Full thread bodies before watch/draft | read |
 | `b2b-lead-grading` | (grade) | Tier inbound B2B (Tier-1/2/Trash) | grade |
 | `talent-sourcing-grading` | (grade) | Tier talent, ex-Skolkovo pool | grade |
+| `lead-enrichment` | (connector) | Enrich lead/company via Clay + Apollo | read + propose |
+| `call-prep` | (connector) | One-pager before a call/meeting | read + draft |
+| `call-coaching` | (connector) | Calls → best-practices/coaching library | read + propose |
+| `support-triage` | (connector) | Triage Pylon/Zendesk; Fin self-serve | read + draft |
+| `hiring-pipeline` | (connector) | Ashby stage tracking + interview prep | read + assign |
+| `deal-desk` | (connector) | HubSpot → Ironclad contract workflow (pilot) | status + draft (L3 sign) |
 | `ernest-watch` | (orchestration) | Run all concerns | remind |
 | `ernest-self-repair` | (meta) | Diagnose + fix/extend Ernest itself | repair |
 | `ernest-preferences` | (meta) | Learn + apply CEO's format/autonomy taste | adapt |
@@ -38,6 +44,12 @@ version: 1.0.0
 - Full thread read (email/Slack) → `read-thread` / `ernest read`
 - Triage/qualify inbound B2B → `b2b-lead-grading` / `ernest grade --b2b`
 - Qualify candidates (ex-Skolkovo) → `talent-sourcing-grading` / `ernest grade --talent`
+- "Who is this" / enrich lead or list (Clay/Apollo) → `lead-enrichment`
+- Prep for a call/meeting/deal → `call-prep` / `/ernest-call-prep`
+- Review calls / build playbook / coaching (Fireflies) → `call-coaching`
+- Support load / tickets / self-serve (Pylon/Zendesk/Fin) → `support-triage`
+- Hiring status / interview prep / stalled candidates (Ashby) → `hiring-pipeline`
+- Contracts / redlines / deal-desk status (Ironclad/MATIC) → `deal-desk` (pilot, L3-gated)
 - Something broken / tool missing / "fix it" → `ernest-self-repair` / `/ernest-doctor`
 - New automation → `ernest-use-case-author` or `ernest new-automation`
 - Change ICP / grading / talent pool → edit `data/grading/*.json` + `memory/icp-*.md`, re-run `ernest grade`

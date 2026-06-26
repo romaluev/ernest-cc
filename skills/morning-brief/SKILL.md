@@ -22,24 +22,26 @@ Create a short, executive brief for the CEO from the last 24 hours of watch card
 window: "24h"
 include:
   - watch_cards
-  - inbox
-  - calendar
-  - hubspot
+  - calendar          # today's meetings; flag which need call-prep
+  - hubspot           # deals: closing this week, no next step, stalled, stage changes <24h
+  - inbox             # important unanswered (clients/partners first)
+  - slack             # mentions / DMs needing action
+  - calls             # Fireflies: yesterday's call summaries + action items
+  - notion            # weekly initiatives/goals owned by the CEO
   - open_promises
 ```
 
 ## Data Source Order
 
-Use the first available source:
+Use the first available source (connectors are swappable):
 
-- `mcp__ernest-brain__list_watch_cards`
-- `mcp__ernest-brain__search_mail`
-- `mcp__ernest-brain__search_hubspot`
-- `mcp__ernest-brain__search_memory`
+- VPS brain: `mcp__ernest-brain__list_watch_cards`, `search_mail`, `search_hubspot`, `search_memory`.
+- Live native MCP: Google Calendar, HubSpot, Gmail, Slack, Fireflies (or Gong), Notion.
+- Export fallback: `data/mail`, `data/hubspot`, `data/calendar`, `data/calls`, `data/notion`.
+  Label those outputs `source: local-export`.
 
-If the VPS brain is not configured, use local MCP connectors. If local connectors
-are not configured, read exported files under `data/mail`, `data/hubspot`, and
-`data/calendar`. Label those outputs `source: local-export`.
+If a source is not connected, include the sections you can and note which inputs
+were unavailable — don't drop the brief.
 
 Deterministic baseline: `ernest brief` composes this exact brief from the same
 source order with no model required. Run it directly for the offline/headless
@@ -47,20 +49,40 @@ path, or read its output and enrich it with live reasoning when connectors exist
 
 ## Output Format
 
+Chat stays short (house format): **Bottom line** (the single most important
+thing today) + **Top 3 actions**, then **Read more →** the rendered digest. The
+full brief uses this fixed order:
+
 ```markdown
 # Ernest Brief - <date>
 
-## Needs CEO Today
-- <item> — owner, source, recommended next action
+## Bottom line
+- <the one thing that matters most today>
 
-## Watch
-- <item> — why it matters
+## Today's calendar
+- <time> <meeting> — flag [needs call-prep] where relevant
 
-## Calendar / Prep
-- <meeting> — prep needed
+## Top 3 actions
+- <highest-leverage moves on revenue/relationships>
 
-## Draft Triggers
+## Deals needing attention
+- <closing this week / no next step / stalled 7d+ / stage change> (HubSpot)
+
+## Unanswered
+- <important mail + Slack to reply to — one line of context each>
+
+## Open follow-ups from yesterday
+- <promises made, not yet kept>
+
+## Yesterday's calls
+- <Fireflies summary + action items owned by the CEO>
+
+## Reminders
+- <weekly initiatives / events from Notion>
+
+## Draft triggers
 - Reply `draft these` to any card when you want me to prepare actions.
 ```
 
-Keep the brief under 600 words unless the CEO asks for detail.
+Omit any section with no items. Keep the full brief under 600 words; the chat
+summary far shorter. Remind-only — never draft or write here.

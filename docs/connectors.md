@@ -62,6 +62,40 @@ the active config to `~/.ernest-cc/.mcp.json`.
 | List sync (CRM / sheet) | `data/lists/*.csv` | HubSpot or Sheets MCP |
 | Sourcing pipeline | `data/sourcing/targets.csv` | Search MCP (optional) |
 | Slack task tracking | `data/slack/tasks.csv` | Slack MCP (read channels) |
+| Call prep | `data/hubspot/`, `data/calls/` | HubSpot + Fireflies + Clay/Apollo + web |
+| Call coaching | `data/calls/` | Fireflies (or Gong) + HubSpot + Notion |
+| Support triage | `data/support/` | Pylon + Zendesk + Intercom (Fin) + Slack |
+| Hiring pipeline | `data/ashby/` | Ashby + Calendar + Gmail/Slack + Notion |
+| Lead enrichment | `data/enrichment/` | Clay + Apollo + HubSpot |
+| Deal desk (contracts) | `data/notion/` (dry run) | HubSpot + Ironclad (via MATIC) + Notion |
+
+## Higgsfield stack map (flexible / swappable)
+
+Connectors are a swappable layer — point a skill at whatever tool you use. This
+maps the current Higgsfield stack and the open gaps. Reads/searches are used
+freely; **sends, posts, CRM/contract writes stay approval-gated**.
+
+| Function | Tool (Higgsfield) | Ernest use | Status |
+|---|---|---|---|
+| CRM / source of truth | HubSpot | canonical contacts, deals, stages | live-capable |
+| Lead routing | HubSpot automations | watch + assign | live-capable |
+| Enrichment | Clay + Apollo | `lead-enrichment` → grading | live-capable |
+| Call recording | Fireflies | `call-prep`, `call-coaching` | live-capable |
+| Coaching | — (gap) | `call-coaching` builds the layer | new |
+| Contracts (CLM) | Ironclad (+ MATIC) | `deal-desk` pilot, L3-gated | pilot |
+| Comms | Slack | routing, owed replies, approvals | live-capable |
+| Support self-serve | Intercom Fin (testing) | `support-triage` deflection | evaluating |
+| Tickets | Pylon + Zendesk | `support-triage` | live-capable |
+| Knowledge / policy | Notion | positioning, policy, playbooks | live-capable |
+| Data warehouse | Hex | metrics on request | optional |
+| ATS | Ashby | `hiring-pipeline` | live-capable (no autos yet) |
+| Productivity | Google Workspace | Calendar/Gmail in brief + prep | live-capable |
+| Orchestration | Claude (connectors) | all of the above | this system |
+
+Open gaps Ernest is built to help close: (1) self-serve routing (Fin pilot),
+(2) contracts inside the CRM (HubSpot→Ironclad via MATIC — needs legal sign-off),
+(3) coaching/best-practices capture, (4) hiring automation. Each has a skill that
+works read-first today and proposes the write/automation step for approval.
 
 ## VPS brain (optional)
 

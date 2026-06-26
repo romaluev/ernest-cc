@@ -42,6 +42,12 @@ REQUIRED_PROMPTS = [
     "Bottom line",
     "ernest feedback",
     "memory/preferences.md",
+    "/ernest-call-prep",
+    "call-coaching",
+    "support-triage",
+    "hiring-pipeline",
+    "lead-enrichment",
+    "deal-desk",
 ]
 
 

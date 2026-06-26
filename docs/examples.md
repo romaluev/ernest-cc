@@ -139,6 +139,81 @@ Card: `talent-grades--<date>.md`.
 
 ---
 
+### Prep for a call / meeting / deal
+
+One-pager before you walk in. Pulls HubSpot + Fireflies + Clay/Apollo + comms +
+web + Notion positioning (whatever's connected).
+
+```text
+/ernest-call-prep Acme
+```
+
+```text
+Prep me for my next call. Goal, who's on it, deal context, 5 discovery questions,
+risks, and the next step to lock. Mark what's from CRM vs the web.
+```
+
+Skill: `call-prep`. Output: short summary + a rendered one-pager.
+
+---
+
+### Review calls / build a playbook (coaching)
+
+Higgsfield records calls (Fireflies) but has no coaching layer — this builds it.
+
+```text
+Review last week's calls. What objections came up and which responses actually
+worked? Turn the wins into 5 reusable plays. Don't post anything.
+```
+
+Skill: `call-coaching`. Saving to Notion / posting to Slack is draft-first.
+
+---
+
+### Support triage (Pylon / Zendesk / Fin)
+
+```text
+What's at risk in support right now? Separate needs-a-human from routeable from
+self-serve candidates Fin could deflect. Draft replies, don't send.
+```
+
+Skill: `support-triage`.
+
+---
+
+### Hiring pipeline (Ashby)
+
+```text
+Who's stuck in the pipeline or waiting on us? Prep me for this week's interviews
+with the role rubric. Nudge owners for missing scorecards — draft only.
+```
+
+Skill: `hiring-pipeline`.
+
+---
+
+### Enrich a lead or list (Clay / Apollo)
+
+```text
+Who is this lead? Enrich with role, company size, funding, and signals, then
+grade them. Propose CRM updates — don't write.
+```
+
+Skill: `lead-enrichment` → feeds grading.
+
+---
+
+### Contracts / deal desk (Ironclad pilot)
+
+```text
+Where's the Acme agreement? Show CRM stage vs Ironclad status and the blocker.
+Draft redlines from our Notion policy — legal approves before anything moves.
+```
+
+Skill: `deal-desk`. Pilot; creating/sending/signing is manual (L3).
+
+---
+
 ### Dropped follow-ups
 
 ```text

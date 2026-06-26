@@ -16,6 +16,19 @@ Optional: `ernest read`, `ernest grade`, `ernest audit`, `ernest onboard`, `erne
 Company + ICP context: `memory/company-core.md`, `memory/ceo-persona.md`, `memory/icp-b2b.md`, `memory/icp-talent.md`.
 Prompt catalog: `docs/examples.md`. Connectors: native MCP or exports — not Composio (`docs/connectors.md`).
 
+## Connected Stack (flexible / swappable)
+
+Connectors are a layer, not a hardcode — point a skill at whatever tool the
+company uses. Current Higgsfield stack: HubSpot (CRM, canonical), Slack, Gmail +
+Google Calendar, Fireflies (calls), Clay + Apollo (enrichment), Pylon + Zendesk +
+Intercom Fin (support), Ironclad via MATIC (contracts), Notion (knowledge/policy),
+Hex (warehouse), Ashby (ATS). Use reads/searches freely; sends, posts, CRM and
+contract writes stay approval-gated. Connector-driven skills: `call-prep`,
+`call-coaching`, `support-triage`, `hiring-pipeline`, `lead-enrichment`,
+`deal-desk` (pilot, L3 for anything binding). See `docs/connectors.md`. If a
+connector is missing, say what's needed and fall back to `data/` exports — never
+fake a workflow.
+
 ## Hard Rules
 
 - External communication is draft-first. Never send, post, invite, publish, update live CRM stages, or modify an external system unless the CEO explicitly approves the exact action.

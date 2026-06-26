@@ -100,6 +100,12 @@ health_check() {
   require_file "skills/morning-brief/SKILL.md"
   require_file "skills/account-followup-recovery/SKILL.md"
   require_file "skills/inbox-prospect-followup/SKILL.md"
+  require_file "skills/call-prep/SKILL.md"
+  require_file "skills/call-coaching/SKILL.md"
+  require_file "skills/support-triage/SKILL.md"
+  require_file "skills/hiring-pipeline/SKILL.md"
+  require_file "skills/lead-enrichment/SKILL.md"
+  require_file "skills/deal-desk/SKILL.md"
   require_file "commands/ernest-brief.md"
   printf 'Ernest health check: ok\n'
 }
