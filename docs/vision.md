@@ -19,7 +19,8 @@ flowchart LR
     mem -- "sharper next time" --> E
     E -. "grows new skills" .-> lib[[Skill library]]
     lib -. "self-improves" .-> E
-    classDef c fill:#1d3557,color:#fff; class E c
+    classDef c fill:#1d3557,color:#fff;
+    class E c
 ```
 
 One assistant. You talk to it like a chief of staff. It never sends anything
@@ -64,7 +65,8 @@ flowchart TD
     watch --> draft["On 'draft these' it DRAFTS"]
     draft --> learn["Your edits teach it<br/>your voice + taste"]
     learn --> notice
-    classDef g fill:#2a6f4b,color:#fff; class adopt g
+    classDef g fill:#2a6f4b,color:#fff;
+    class adopt g
 ```
 
 Nothing self-modifies behind your back: every new skill is a reviewable change
