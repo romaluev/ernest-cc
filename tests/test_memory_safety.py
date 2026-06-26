@@ -32,7 +32,7 @@ def _cfg(tmp: Path) -> config.Config:
 def test_reonboard_preserves_memory() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="ernest_mem_"))
     cfg = _cfg(tmp)
-    onboard.run(cfg, onboard.Answers(name="Alex", company="Higgsfield", icp="AI creators",
+    onboard.run(cfg, onboard.Answers(name="Alex", company="Northwind", icp="AI creators",
                                      redlines="never email investors"))
     core = cfg.memory_dir / "company-core.md"
     # CEO hand-adds a custom bullet
@@ -44,10 +44,10 @@ def test_reonboard_preserves_memory() -> None:
     check("memory stays local by default", "stays on this machine" in txt)
 
     # re-onboard with DIFFERENT answers
-    onboard.run(cfg, onboard.Answers(name="Alex M", company="Higgsfield Inc", icp="studios",
+    onboard.run(cfg, onboard.Answers(name="Alex M", company="Northwind Inc", icp="studios",
                                      redlines="never email press"))
     after = core.read_text(encoding="utf-8")
-    check("original company preserved (not overwritten)", "Higgsfield" in after)
+    check("original company preserved (not overwritten)", "Northwind" in after)
     check("custom bullet preserved across re-onboard", "Board cadence: monthly" in after)
     check("a backup was written", any((cfg.memory_dir / ".backups").glob("*/company-core.md")))
 

@@ -69,13 +69,13 @@ the active config to `~/.ernest-cc/.mcp.json`.
 | Lead enrichment | `data/enrichment/` | Clay + Apollo + HubSpot |
 | Deal desk (contracts) | `data/notion/` (dry run) | HubSpot + Ironclad (via MATIC) + Notion |
 
-## Higgsfield stack map (flexible / swappable)
+## Northwind stack map (flexible / swappable)
 
 Connectors are a swappable layer — point a skill at whatever tool you use. This
-maps the current Higgsfield stack and the open gaps. Reads/searches are used
+maps the current Northwind stack and the open gaps. Reads/searches are used
 freely; **sends, posts, CRM/contract writes stay approval-gated**.
 
-| Function | Tool (Higgsfield) | Ernest use | Status |
+| Function | Tool (Northwind) | Ernest use | Status |
 |---|---|---|---|
 | CRM / source of truth | HubSpot | canonical contacts, deals, stages | live-capable |
 | Lead routing | HubSpot automations | watch + assign | live-capable |

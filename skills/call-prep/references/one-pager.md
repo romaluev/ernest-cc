@@ -24,7 +24,7 @@ the 2 minutes before the call. Order is fixed.
 ## Discovery questions
 1. <4–6 sharp questions that advance the deal>
 
-## Positioning (Higgsfield fit)
+## Positioning (Northwind fit)
 - <2–3 points tied to their pains — video/creative/enterprise where it fits>
 
 ## Competitive context

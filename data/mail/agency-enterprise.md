@@ -14,5 +14,5 @@ subject: Enterprise rollout for our ad agency
 
 ### 2026-06-22 | Dana Whitfield (inbound)
 Hi — we're a creative ad agency producing video for global brands. We want to
-roll out Higgsfield across ~40 seats this quarter and need an enterprise plan and
+roll out Northwind across ~40 seats this quarter and need an enterprise plan and
 MSA. Who can we talk to about procurement?

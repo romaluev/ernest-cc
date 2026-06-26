@@ -1,9 +1,9 @@
 # /ernest-grade
 
-Grade and sort inbound B2B leads and sourced talent against Higgsfield's ICP.
+Grade and sort inbound B2B leads and sourced talent against Northwind's ICP.
 
 - B2B leads → `b2b-lead-grading` skill (Tier-1 / Tier-2 / Trash)
-- Talent (ex-Skolkovo pool) → `talent-sourcing-grading` skill (Tier-1 / 2 / 3)
+- Talent (ex-NovaLabs pool) → `talent-sourcing-grading` skill (Tier-1 / 2 / 3)
 
 Deterministic baseline:
 

@@ -19,7 +19,7 @@ version: 1.0.0
 | `slack-task-tracker` | `task-tracker` | Open/overdue tasks by owner | assign |
 | `read-thread` | (read) | Full thread bodies before watch/draft | read |
 | `b2b-lead-grading` | (grade) | Tier inbound B2B (Tier-1/2/Trash) | grade |
-| `talent-sourcing-grading` | (grade) | Tier talent, ex-Skolkovo pool | grade |
+| `talent-sourcing-grading` | (grade) | Tier talent, ex-NovaLabs pool | grade |
 | `lead-enrichment` | (connector) | Enrich lead/company via Clay + Apollo | read + propose |
 | `call-prep` | (connector) | One-pager before a call/meeting | read + draft |
 | `call-coaching` | (connector) | Calls → best-practices/coaching library | read + propose |
@@ -43,7 +43,7 @@ version: 1.0.0
 - Task ownership → `slack-task-tracker`
 - Full thread read (email/Slack) → `read-thread` / `ernest read`
 - Triage/qualify inbound B2B → `b2b-lead-grading` / `ernest grade --b2b`
-- Qualify candidates (ex-Skolkovo) → `talent-sourcing-grading` / `ernest grade --talent`
+- Qualify candidates (ex-NovaLabs) → `talent-sourcing-grading` / `ernest grade --talent`
 - "Who is this" / enrich lead or list (Clay/Apollo) → `lead-enrichment`
 - Prep for a call/meeting/deal → `call-prep` / `/ernest-call-prep`
 - Review calls / build playbook / coaching (Fireflies) → `call-coaching`

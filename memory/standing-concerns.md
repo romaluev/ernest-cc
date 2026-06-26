@@ -63,7 +63,7 @@ concerns:
       target_key: "outlet"
       list_name: "Press tracker sheet"
 
-  # Partnership + ex-Skolkovo talent sourcing. Talent rows (purpose=hire) are
+  # Partnership + ex-NovaLabs talent sourcing. Talent rows (purpose=hire) are
   # auto-graded Tier-1/2/3; run `ernest grade --talent` for a dedicated card.
   - id: partnership-sourcing
     playbook: sourcing-pipeline

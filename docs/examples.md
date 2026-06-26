@@ -119,7 +119,7 @@ Card: `b2b-grades--<date>.md`, sorted Tier-1 first with reasons + flags.
 
 ---
 
-### Grade talent (ex-Skolkovo pool)
+### Grade talent (ex-NovaLabs pool)
 
 Criteria live in `memory/icp-talent.md`.
 
@@ -130,9 +130,9 @@ ernest grade --talent
 ```text
 /ernest-grade
 
-Grade my ex-Skolkovo sourcing list. Tier-1 only if Big Tech senior, strong
+Grade my ex-NovaLabs sourcing list. Tier-1 only if Big Tech senior, strong
 technical base, or AI-media product experience — and likely interested, not a
-current Higgsfield investor/employee.
+current Northwind investor/employee.
 ```
 
 Card: `talent-grades--<date>.md`.
@@ -159,7 +159,7 @@ Skill: `call-prep`. Output: short summary + a rendered one-pager.
 
 ### Review calls / build a playbook (coaching)
 
-Higgsfield records calls (Fireflies) but has no coaching layer — this builds it.
+Northwind records calls (Fireflies) but has no coaching layer — this builds it.
 
 ```text
 Review last week's calls. What objections came up and which responses actually
@@ -477,10 +477,10 @@ right connector, and set it up — ask me before anything that needs my login.
 
 ### Change the ICP or talent criteria (flexible)
 
-ex-Skolkovo is just the current talent plan. Criteria are living config.
+ex-NovaLabs is just the current talent plan. Criteria are living config.
 
 ```text
-Change our talent focus from ex-Skolkovo to ex-FAANG design leads, then re-grade.
+Change our talent focus from ex-NovaLabs to ex-FAANG design leads, then re-grade.
 ```
 
 ```text
@@ -533,7 +533,7 @@ Find similar profiles on LinkedIn for partnership outreach. Add top candidates t
 | Card id | What it catches |
 |---|---|
 | `b2b-grades` | Inbound B2B sorted Tier-1 / Tier-2 / Trash (`ernest grade`) |
-| `talent-grades` | ex-Skolkovo talent sorted Tier-1 / 2 / 3 (`ernest grade --talent`) |
+| `talent-grades` | ex-NovaLabs talent sorted Tier-1 / 2 / 3 (`ernest grade --talent`) |
 | `dropped-followups` | Threads you owe a reply on (recent; daily watch) |
 | `mail-audit` | Full-window owed-reply sweep (on-demand; use `ernest audit`) |
 | `important-followups` | VIP/investor-tier slips |

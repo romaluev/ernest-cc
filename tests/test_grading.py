@@ -70,13 +70,13 @@ def test_talent() -> None:
                      profile="product manager, go-to-market, US startup experience")
     check("PM in tier-1 country is NOT tier-1", g.tier == "tier-2")
 
-    # Hard filter: current Higgsfield -> tier-3.
-    g = grade_talent(name="Insider", company="Higgsfield", profile="works at Higgsfield")
-    check("current Higgsfield -> tier-3 (excluded)", g.tier == "tier-3")
+    # Hard filter: current Northwind -> tier-3.
+    g = grade_talent(name="Insider", company="Northwind", profile="works at Northwind")
+    check("current Northwind -> tier-3 (excluded)", g.tier == "tier-3")
 
     # Investor exclusion.
-    g = grade_talent(name="Backer", profile="angel who invested in Higgsfield")
-    check("Higgsfield investor -> tier-3 (excluded)", g.tier == "tier-3")
+    g = grade_talent(name="Backer", profile="angel who invested in Northwind")
+    check("Northwind investor -> tier-3 (excluded)", g.tier == "tier-3")
 
     # Thin profile -> tier-3 low, flagged.
     g = grade_talent(name="Nobody", profile="analyst at a local company")

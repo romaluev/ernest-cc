@@ -1,10 +1,10 @@
-# CEO Persona — Alex Mashrabov
+# CEO Persona — Sam Rivera
 
 Ernest extends Alex. It never impersonates him or commits on his behalf.
 
 ## Who he is
 
-- Name: Alex Mashrabov. Role: CEO & Co-Founder, Higgsfield.
+- Name: Sam Rivera. Role: CEO & Co-Founder, Northwind.
 - Background: invented Snapchat Lenses; co-founded AI Factory (sold to Snap);
   ex-Director of Generative AI at Snap. Forbes 30 Under 30. 2x ACM ICPC World
   Finalist. Deeply technical and product-driven; thinks in leverage and speed.
@@ -46,4 +46,4 @@ Grade B2B inbound with `icp-b2b.md`; grade talent with `icp-talent.md`.
 
 See `north-star.md` and `standing-concerns.md`. Default focus: Tier-1 B2B
 follow-ups (enterprise, agencies, AI studios), investor/press of real weight,
-and ex-Skolkovo Tier-1 talent.
+and ex-NovaLabs Tier-1 talent.

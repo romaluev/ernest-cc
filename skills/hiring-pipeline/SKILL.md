@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Hiring Pipeline
 
-Higgsfield runs the ATS in Ashby with no automation yet. This skill adds the
+Northwind runs the ATS in Ashby with no automation yet. This skill adds the
 remind/assign layer so candidates don't stall and interviewers stay prepared.
 It complements `talent-sourcing-grading` (who to pursue) and `candidate-followup`.
 

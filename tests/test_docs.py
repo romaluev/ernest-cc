@@ -33,7 +33,7 @@ REQUIRED_PROMPTS = [
     "slack-open-threads",
     "ernest grade",
     "/ernest-grade",
-    "ex-Skolkovo",
+    "ex-NovaLabs",
     "ernest doctor",
     "/ernest-doctor",
     "/ernest-audit",
@@ -61,7 +61,7 @@ def main() -> int:
         for needle in REQUIRED_PROMPTS:
             if needle not in text:
                 failures.append(f"examples.md missing: {needle}")
-        if "Manoj" in text or "Nubank" in text:
+        if "Manoj" in text or "Brightpay" in text:
             failures.append("examples.md still contains company-specific names")
     connectors = ROOT / "docs" / "connectors.md"
     if connectors.is_file() and "does **not** use Composio" not in connectors.read_text():

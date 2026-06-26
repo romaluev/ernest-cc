@@ -57,7 +57,7 @@ def test_brain_server_lifecycle() -> None:
     # isolate memory writes from the repo's real memory dir
     mem = sandbox / "memory"
     mem.mkdir(parents=True)
-    (mem / "company-core.md").write_text("# Company\n\nHiggsfield is the company.\n", encoding="utf-8")
+    (mem / "company-core.md").write_text("# Company\n\nNorthwind is the company.\n", encoding="utf-8")
 
     from brain import server
     from brain.brain_core import Brain
@@ -101,8 +101,8 @@ def test_brain_server_lifecycle() -> None:
         check("write_memory ok", w.get("ok") is True)
         s, _ = tool_call(url, "search_memory", {"query": "pdf digests"})
         check("search_memory finds written note", s["count"] >= 1 and any("PDF" in r["text"] for r in s["results"]))
-        s2, _ = tool_call(url, "search_memory", {"query": "Higgsfield"})
-        check("search_memory reads markdown memory", any("Higgsfield" in r["text"] for r in s2["results"]))
+        s2, _ = tool_call(url, "search_memory", {"query": "Northwind"})
+        check("search_memory reads markdown memory", any("Northwind" in r["text"] for r in s2["results"]))
 
         # watch card write + dedupe + list
         c1, _ = tool_call(url, "write_watch_card", {"concern_id": "dropped-followup",

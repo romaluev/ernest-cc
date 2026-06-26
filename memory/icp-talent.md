@@ -1,12 +1,12 @@
 # ICP — Talent Grading
 
 How Ernest grades talent for outreach. The **current** outreach plan targets the
-**ex-Skolkovo** alumni pool — but this is a snapshot that will change. The pool
+**ex-NovaLabs** alumni pool — but this is a snapshot that will change. The pool
 and the signal lists are living config, not hardcoded.
 
 **To change the criteria** (no code edits): edit `data/grading/talent-rubric.json`
 (`pool`, Big-Tech names, AI-media models, Tier-1 countries, etc.), or just tell
-Ernest — e.g. "switch our talent focus from ex-Skolkovo to ex-FAANG designers";
+Ernest — e.g. "switch our talent focus from ex-NovaLabs to ex-FAANG designers";
 it updates the rubric and re-runs `ernest grade --talent`. The tiers below apply
 to whatever the current pool is.
 
@@ -21,7 +21,7 @@ to whatever the current pool is.
 ## Hard filter (applies to every tier)
 
 A candidate is only a target if they are **likely to be interested in working
-with / on Higgsfield** AND are **not currently a Higgsfield investor or
+with / on Northwind** AND are **not currently a Northwind investor or
 employee**. If they're a current investor/employee → not a sourcing target
 (treat as Trash for sourcing purposes), regardless of pedigree.
 

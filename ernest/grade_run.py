@@ -1,7 +1,7 @@
 """Run tier grading over real data and write sorted grade cards.
 
 B2B: grade inbound mail threads (CRM tier > lists > inference).
-Talent: grade sourcing rows (purpose=hire) against the ex-Skolkovo rubric.
+Talent: grade sourcing rows (purpose=hire) against the ex-NovaLabs rubric.
 Cards are remind/assign only — grading never sends or mutates anything.
 """
 from __future__ import annotations

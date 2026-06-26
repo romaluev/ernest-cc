@@ -163,15 +163,15 @@ def grade_talent(
     reasons: List[str] = []
     flags: List[str] = []
 
-    # Hard filter: current Higgsfield employee/investor -> not a target.
+    # Hard filter: current Northwind employee/investor -> not a target.
     cur = _any_in(hay, excl.get("current_company", []))
     inv = _any_in(hay, excl.get("investor_terms", []))
     if cur:
         return Grade("tier-3", "high",
-                     [f"Excluded: appears to be current Higgsfield ('{cur}')"], [])
+                     [f"Excluded: appears to be current Northwind ('{cur}')"], [])
     if inv:
         return Grade("tier-3", "high",
-                     [f"Excluded: appears to be a Higgsfield investor ('{inv}')"], [])
+                     [f"Excluded: appears to be a Northwind investor ('{inv}')"], [])
 
     # Tier-1 signals. A Tier-1 country alone is NOT a qualifier; it only
     # strengthens "strong B2B/B2C experience in a Tier-1 country".
@@ -197,7 +197,7 @@ def grade_talent(
 
     if reasons:
         confidence = "high" if structural else "medium"
-        flags.append("Confirm they're likely interested in Higgsfield (judgment call).")
+        flags.append("Confirm they're likely interested in Northwind (judgment call).")
         return Grade("tier-1", confidence, reasons, flags)
 
     # Tier-2 signals.
@@ -214,7 +214,7 @@ def grade_talent(
         t2_reasons.append(f"Worked with AI media models: '{ai_media}'")
 
     if t2_reasons:
-        flags.append("Confirm interest + that they're not a current Higgsfield investor/employee.")
+        flags.append("Confirm interest + that they're not a current Northwind investor/employee.")
         return Grade("tier-2", "low", t2_reasons, flags)
 
     flags.append("No Tier-1/2 signal found in profile text. Read the full profile "
@@ -231,7 +231,7 @@ _DEFAULTS: Dict[str, dict] = {
             "companies": ["google", "microsoft", "amazon", "meta", "nvidia", "coca-cola", "nike"],
             "people": ["harry stebbings", "ilya sutskever"],
             "intent_keywords": ["enterprise", "procurement", "rollout", "contract", "seats", "rfp"],
-            "reputation_keywords": ["spoke with alex", "talked with alex", "met alex", "as discussed with alex", "alex suggested", "alex mashrabov"],
+            "reputation_keywords": ["spoke with alex", "talked with alex", "met alex", "as discussed with alex", "alex suggested", "sam rivera"],
             "fund_aum_threshold_busd": 2.0,
         },
         "trash": {
@@ -241,7 +241,7 @@ _DEFAULTS: Dict[str, dict] = {
         },
     },
     "talent": {
-        "pool": "ex-Skolkovo",
+        "pool": "ex-NovaLabs",
         "tier1": {
             "big_tech": ["google", "meta", "apple", "amazon", "microsoft", "nvidia", "openai", "anthropic", "snap", "tiktok", "bytedance", "stripe"],
             "senior_titles": ["team lead", "lead", "head of", "director", "vp", "principal", "staff", "chief", "founder", "co-founder"],
@@ -255,8 +255,8 @@ _DEFAULTS: Dict[str, dict] = {
             "product_gtm_keywords": ["product manager", "go-to-market", "gtm", "growth", "partnerships", "business development"],
         },
         "exclusions": {
-            "current_company": ["higgsfield"],
-            "investor_terms": ["higgsfield investor", "invested in higgsfield"],
+            "current_company": ["northwind"],
+            "investor_terms": ["northwind investor", "invested in northwind"],
         },
     },
 }

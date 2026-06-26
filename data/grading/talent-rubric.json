@@ -1,6 +1,6 @@
 {
-  "_comment": "Editable talent grading rubric for the ex-Skolkovo pool (and general candidates). Signal priority: ATS/CRM > these lists > inference. 'Likely interested' is always a human-flagged judgment call.",
-  "pool": "ex-Skolkovo",
+  "_comment": "Editable talent grading rubric for the ex-NovaLabs pool (and general candidates). Signal priority: ATS/CRM > these lists > inference. 'Likely interested' is always a human-flagged judgment call.",
+  "pool": "ex-NovaLabs",
   "tier1": {
     "big_tech": [
       "google", "alphabet", "meta", "facebook", "instagram", "apple", "amazon",
@@ -44,10 +44,10 @@
     ]
   },
   "exclusions": {
-    "current_company": ["higgsfield"],
+    "current_company": ["northwind"],
     "investor_terms": [
-      "higgsfield investor", "invested in higgsfield", "limited partner in higgsfield",
-      "angel in higgsfield", "backs higgsfield"
+      "northwind investor", "invested in northwind", "limited partner in northwind",
+      "angel in northwind", "backs northwind"
     ]
   }
 }

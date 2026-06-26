@@ -1,19 +1,19 @@
 ---
 name: talent-sourcing-grading
-description: Grade talent for Higgsfield outreach (current focus pool: ex-Skolkovo alumni) into Tier-1, Tier-2, or Tier-3/Trash. Use when sourcing or qualifying candidates, reviewing LinkedIn profiles, building a recruiting pipeline, or deciding who to reach out to. Assign owners; never message a candidate without approval.
+description: Grade talent for Northwind outreach (current focus pool: ex-NovaLabs alumni) into Tier-1, Tier-2, or Tier-3/Trash. Use when sourcing or qualifying candidates, reviewing LinkedIn profiles, building a recruiting pipeline, or deciding who to reach out to. Assign owners; never message a candidate without approval.
 version: 1.0.0
 ---
 
 # Talent Sourcing Grading
 
 Grade candidates so outreach effort goes to Tier-1 first. Current pool focus:
-**ex-Skolkovo** alumni. Full criteria: `memory/icp-talent.md`. Quick rubric:
+**ex-NovaLabs** alumni. Full criteria: `memory/icp-talent.md`. Quick rubric:
 `references/rubric.md`.
 
 ## Hard filter first (applies to everyone)
 
-A candidate is only a target if they are **likely interested in Higgsfield**
-AND **not a current Higgsfield investor or employee**. Current investor/employee
+A candidate is only a target if they are **likely interested in Northwind**
+AND **not a current Northwind investor or employee**. Current investor/employee
 → not a sourcing target (Tier-3 for sourcing), regardless of pedigree.
 
 ## Signal priority
@@ -45,14 +45,14 @@ candidate:
   confidence: high | medium | low
   why: "<decisive signals>"
   likely_interested: yes | no | unknown   # judgment — explain briefly
-  excluded: false | "current Higgsfield investor/employee"
+  excluded: false | "current Northwind investor/employee"
   action: "Tier-1/2 -> assign owner + warm outreach; Tier-3 -> skip"
   source: "<profile url / ATS record>"
 ```
 
 ## Changing the criteria (it's a snapshot)
 
-The pool (currently ex-Skolkovo) and all signal lists are **living config** in
+The pool (currently ex-NovaLabs) and all signal lists are **living config** in
 `data/grading/talent-rubric.json`. When Alex says "change our talent focus" or
 "add X as a Tier-1 signal", edit that JSON (`pool` + lists), summarize the diff,
 and re-run `ernest grade --talent`. Never hardcode the pool in logic.

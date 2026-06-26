@@ -1,6 +1,6 @@
 ---
 name: b2b-lead-grading
-description: Grade and sort inbound B2B leads/threads for Higgsfield into Tier-1, Tier-2, or Trash so Alex only sees what matters. Use when triaging inbound email, deciding who to reply to first, qualifying a prospect, or asking "is this worth my time?". Remind/assign only; never auto-reply.
+description: Grade and sort inbound B2B leads/threads for Northwind into Tier-1, Tier-2, or Trash so Alex only sees what matters. Use when triaging inbound email, deciding who to reply to first, qualifying a prospect, or asking "is this worth my time?". Remind/assign only; never auto-reply.
 version: 1.0.0
 ---
 

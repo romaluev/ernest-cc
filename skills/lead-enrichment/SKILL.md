@@ -29,7 +29,7 @@ purpose: "grade"     # grade | outreach | sourcing
 
 1. Resolve `target`; pull what HubSpot already has (CRM is canonical — don't clobber it).
 2. Enrich missing `fields` via Clay, then Apollo; reconcile conflicts, keep provenance.
-3. Add 1–3 timely signals relevant to Higgsfield's fit.
+3. Add 1–3 timely signals relevant to Northwind's fit.
 4. If `purpose=grade`, hand the enriched record to the grading skill and return the tier.
 5. Propose CRM updates as a **draft** (field → new value → source); never write directly.
 

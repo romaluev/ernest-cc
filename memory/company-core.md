@@ -1,18 +1,18 @@
-# Company Core — Higgsfield
+# Company Core — Northwind
 
 Durable context Ernest can rely on. Volatile numbers live in the dated block at
 the bottom; update that block, not the prose.
 
-## What Higgsfield is
+## What Northwind is
 
-Higgsfield is an AI video-creation company. The original product turns a single
+Northwind is an AI video-creation company. The original product turns a single
 image or short prompt into platform-ready video ("click-to-video") with strong
 camera control and consistent motion. The company is now moving up-market into
 **autonomous enterprise marketing** — agents that take a campaign from concept to
 live, optimized video ads.
 
 - Founded: October 2023. HQ: San Francisco. Operates in ~35 countries.
-- Founder/CEO: Alex Mashrabov (see `ceo-persona.md`).
+- Founder/CEO: Sam Rivera (see `ceo-persona.md`).
 - Model family: SOUL (in-house aesthetic image/video models).
 - Enterprise product: Supercomputer — autonomous marketing agent stack
   (creative ideation → production → posting → optimization) built on NVIDIA's
@@ -30,7 +30,7 @@ revenue motion this assistant prioritizes.
 ## Who we hire (summary)
 
 We source senior operators and strong technical talent, with a current focus on
-the **ex-Skolkovo** alumni pool. Full grading rubric: `icp-talent.md`.
+the **ex-NovaLabs** alumni pool. Full grading rubric: `icp-talent.md`.
 
 ## Positioning truths (stable)
 
@@ -54,6 +54,6 @@ the **ex-Skolkovo** alumni pool. Full grading rubric: `icp-talent.md`.
 > independently audited; never repeat a number externally without checking.
 
 - Valuation: ~$1.3B. Total funding: ~$138M (Series A + extension).
-- Lead investors: Accel; also Menlo Ventures, AI Capital Partners.
+- Lead investors: Accel; also Summit Ventures, AI Capital Partners.
 - Reported scale: 20M+ users; ~$200M run-rate; thousands of business customers.
 - Enterprise launch: Supercomputer 2.0 (mid-2026) on NVIDIA Agent Toolkit.

@@ -1,11 +1,11 @@
 # Talent Tier Rubric (quick reference)
 
-Mirrors `memory/icp-talent.md`. Pool focus: ex-Skolkovo alumni.
+Mirrors `memory/icp-talent.md`. Pool focus: ex-NovaLabs alumni.
 
 ## Hard filter (every tier)
 
-Target only if **likely interested in Higgsfield** AND **not a current
-Higgsfield investor/employee**. Fail → Tier-3 (not a sourcing target).
+Target only if **likely interested in Northwind** AND **not a current
+Northwind investor/employee**. Fail → Tier-3 (not a sourcing target).
 
 ## Tier 1 — pursue (any one)
 

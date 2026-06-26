@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Call Coaching
 
-Higgsfield has call recording (Fireflies) but no coaching layer yet. This skill
+Northwind has call recording (Fireflies) but no coaching layer yet. This skill
 mines calls for patterns and proposes a best-practices library — it does not
 grade people punitively; it extracts what works and turns it into reusable plays.
 

@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Support Triage
 
-Higgsfield runs support on Pylon + Zendesk and is piloting Intercom Fin for
+Northwind runs support on Pylon + Zendesk and is piloting Intercom Fin for
 self-serve. There is no self-serve routing flow yet — this skill triages load,
 proposes routes, and flags what Fin could deflect.
 

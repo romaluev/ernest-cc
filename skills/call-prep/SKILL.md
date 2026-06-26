@@ -39,7 +39,7 @@ and call transcripts — not snippets (`read-thread` / `ernest read`).
 2. Pull deal + company state from CRM; read the last real exchange and last call.
 3. Enrich attendees (role, seniority, what each cares about).
 4. Tier the account with `b2b-lead-grading` when it sharpens prioritization.
-5. Gather 2–3 fresh public signals tied to a hypothesis for Higgsfield.
+5. Gather 2–3 fresh public signals tied to a hypothesis for Northwind.
 6. Write the one-pager (see `references/one-pager.md`), then render it
    (`ernest render`) so it's a clean, shareable artifact.
 
