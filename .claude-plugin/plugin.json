@@ -1,25 +1,17 @@
 {
   "name": "ernest-cc",
-  "version": "1.0.0",
-  "displayName": "Ernest on Claude Code",
-  "description": "Native Claude Code/Cowork bootstrap for a draft-first CEO operating clone. Ships email-centric remind/assign automations (B2B collaborator coverage, candidate follow-up, important-contact recovery, list sync, sourcing, task tracking). Works local-only by default; can optionally use a VPS brain.",
-  "author": "Notiky",
-  "license": "MIT",
-  "entrypoints": {
-    "claudeMd": "CLAUDE.md",
-    "settings": "settings.json",
-    "mcp": ".mcp.json",
-    "skills": "skills",
-    "agents": "agents",
-    "commands": "commands",
-    "hooks": "hooks"
+  "version": "1.1.0",
+  "description": "A draft-first CEO operating clone for Claude Code and Cowork. Watches your inbox/CRM/Slack and reminds you what needs you; drafts replies and outreach only when you ask; never sends without approval. Local-first — your memory stays on your machine.",
+  "author": {
+    "name": "Notiky"
   },
+  "license": "MIT",
   "keywords": [
     "ceo",
+    "chief-of-staff",
     "automation",
-    "claude-code",
+    "draft-first",
     "cowork",
-    "mcp",
-    "draft-first"
+    "local-first"
   ]
 }

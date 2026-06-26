@@ -1,0 +1,54 @@
+{
+  "model": "claude-sonnet-4-6",
+  "outputStyle": "ernest",
+  "permissions": {
+    "defaultMode": "ask",
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "mcp__ernest-brain__health",
+      "mcp__ernest-brain__search_memory",
+      "mcp__ernest-brain__write_memory",
+      "mcp__ernest-brain__list_watch_cards",
+      "mcp__ernest-brain__write_watch_card",
+      "mcp__ernest-brain__search_mail",
+      "mcp__ernest-brain__read_mail_thread",
+      "mcp__ernest-brain__create_mail_draft",
+      "mcp__ernest-brain__search_hubspot",
+      "mcp__ernest-brain__search_slack",
+      "mcp__ernest-brain__read_slack_thread",
+      "mcp__local-memory__read_graph",
+      "mcp__local-memory__search_nodes",
+      "mcp__local-memory__create_entities",
+      "mcp__local-memory__create_relations",
+      "mcp__local-memory__add_observations"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/pre_tool_use.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/capture_learnings.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "includeCoAuthoredBy": false
+}
