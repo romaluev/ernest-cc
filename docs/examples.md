@@ -550,6 +550,27 @@ Cards: `~/ErnestVault/Ernest/00-Watch/` after `ernest start`.
 
 ---
 
+## Complex, multi-step asks
+
+Ernest chains its own steps — you state the outcome, it does watch → read → grade →
+draft and reports once. Examples:
+
+- **Triage + recover, end to end:** *"Go through everything waiting on me, rank what
+  actually matters, and draft replies for the top 3 — I'll review."*
+  (watch → grade against your ICP → read full threads → draft, all gated.)
+- **Account save:** *"Which important clients have gone quiet for 2+ weeks? Read the
+  full history and draft a warm re-open for each, in my voice."*
+- **Inbound to pipeline:** *"Grade this week's inbound leads Tier-1/2/trash, ignore the
+  trash, and for Tier-1 draft a first reply and tell me who to loop in."*
+- **Call-ready in 5 minutes:** *"I have a call with Acme at 3. Pull the thread + CRM,
+  give me a one-pager: where we left off, open questions, and 3 things to land."*
+- **Weekly cleanup:** *"Preview CRM hygiene fixes, draft the list-sync gaps between my
+  email and HubSpot, and summarize what changed — don't apply anything yet."*
+- **Hiring sweep:** *"Score this week's sourcing list against our bar, shortlist the
+  top 5, and draft outreach for each."*
+
+For each, you stay in control: Ernest prepares; you approve every send.
+
 ## Demo (no install)
 
 ```bash

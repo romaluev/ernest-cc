@@ -1,16 +1,24 @@
 # Ernest on Claude Code
 
 Draft-first CEO operating clone for Claude Code/Cowork. Local-first: works with
-no VPS, no Composio, and no connectors out of the box.
+no VPS, no Composio, and no connectors out of the box. Watches what needs you,
+drafts only when you ask, never sends on its own.
 
-## Install and run
+## Get started
+
+**In Claude (no terminal) — recommended:** open the plugin browser (**+** / `/`),
+install **`ernest-cc`** from the Ernest marketplace, then run **`/ernest-setup`** and
+answer ~5 plain questions. New here? Read [how-it-works.md](docs/how-it-works.md) (2 min).
+
+**Terminal (power users / setting up for someone else):**
 
 ```bash
-./install.sh      # once — prints your first brief
-ernest start      # daily
+./install.sh      # once — checks prereqs, installs, prints your first brief
+ernest start      # daily: what needs you (nothing sent)
+ernest schedule   # run the morning brief automatically
 ```
 
-No config editing. Prompts: [docs/examples.md](docs/examples.md).
+No config editing. By default everything stays on your machine ([docs/privacy.md](docs/privacy.md)).
 
 ## What it does
 
@@ -39,11 +47,14 @@ Details: [docs/connectors.md](docs/connectors.md).
 
 | Doc | Purpose |
 |---|---|
-| [docs/quickstart.md](docs/quickstart.md) | Install + daily use |
-| [docs/examples.md](docs/examples.md) | Copy-paste prompts |
+| [docs/quickstart.md](docs/quickstart.md) | Get started (in Claude or terminal) |
+| [docs/how-it-works.md](docs/how-it-works.md) | 2-min mental model, with diagrams |
+| [docs/examples.md](docs/examples.md) | Copy-paste prompts, simple → complex |
+| [docs/privacy.md](docs/privacy.md) | What stays on your machine |
+| [docs/updates.md](docs/updates.md) | One-tap, validated, auto-rollback updates |
 | [docs/connectors.md](docs/connectors.md) | Live data without Composio |
 | [docs/daily-use.md](docs/daily-use.md) | Beyond `start` |
-| [docs/add-automation.md](docs/add-automation.md) | Scale |
+| [docs/add-automation.md](docs/add-automation.md) | Add a new use-case |
 | [docs/README.md](docs/README.md) | Full index |
 
 ## Modes

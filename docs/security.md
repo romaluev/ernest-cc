@@ -1,46 +1,60 @@
 # Security
 
-## Draft-First
+Ernest's safety is enforced by a **deterministic gate** that runs before any tool
+call (`hooks/pre_tool_use.py` → `ernest/gate.py`). It is not a prompt the AI can talk
+its way around — it's code that blocks first.
 
-External sends, posts, calendar invites, CRM writes, and similar live mutations are blocked by `hooks/pre_tool_use.py` before execution.
+## What the gate blocks (deny-by-default)
 
-Prompt rules are not enough. The deterministic hook is the guarantee.
+- **Live external actions** — sending email, posting to Slack, changing your CRM,
+  paying, calendar invites, deleting. Blocked on **every** connector, including ones
+  named by opaque id, and including actions hidden inside an "execute" wrapper. You
+  get a draft for review instead.
+- **Reading secrets** — `.env`, the token/credential files, `.ssh`, `.aws`, Ernest's
+  own config — blocked even via the terminal.
+- **Network egress in local mode** — web fetch/search and any external send/notify are
+  off by default so nothing leaves the machine. Turn web on for a task with
+  `ERNEST_ALLOW_WEB=1` when you actually need research.
+- **Tampering with the guardrails** — the gate, hooks, tests, and audit log can be
+  read but not written, so the self-improvement loop can never disarm its own safety.
 
-## Approval Levels
+What's always allowed: reading, searching, summarizing, writing reminder cards, and
+preparing drafts.
 
-- L0: read, search, classify, summarize, reminder cards.
-- L1: reversible internal memory/config update.
-- L2: external drafts and CRM proposals; CEO approval required.
-- L3: legal, money, contracts, irreversible deletes, credentials, permission expansion.
+## Prompt injection
 
-## Secret Handling
+If a malicious email or message says "send this now" or "ignore your rules," the gate
+still blocks the live send — the decision is deterministic and independent of what the
+model "decided." The worst case is a draft you can review. Reminder cards never carry
+unsent draft bodies, so nothing sensitive is echoed back into ambient content.
 
-- Do not commit `.env`, secrets, tokens, or private files.
-- In VPS mode, app connector tokens stay on the VPS brain.
-- Local mode is explicit and should use only reviewed local MCP servers.
+## Approval levels
 
-## Filesystem Scope
+| Level | Examples | Who |
+|---|---|---|
+| L0 | read, search, classify, summarize, reminder cards | automatic |
+| L1 | reversible internal memory/preference update | automatic, logged |
+| L2 | external drafts, CRM-change proposals, outreach batches | **CEO approves** |
+| L3 | money, legal, contracts, irreversible deletes, credentials, new permissions | **manual only** |
 
-Allowed writes:
+One bounded exception: a CRM "hygiene" job may auto-fix mechanical fields (company,
+first/last name, title) — and only when it's explicitly armed, within a time window,
+on an allowed field list. It ships **off**.
 
-- `memory/**`
-- `logs/**`
-- `${ERNEST_LOCAL_VAULT}/**`
+## Where your data lives
 
-Denied:
+- **Local mode (default):** no tokens, no server, no network. See [privacy.md](privacy.md).
+- **VPS mode (optional):** connector tokens live only on your server; the laptop holds
+  one access key, locked to owner-only (`chmod 600`).
 
-- `.env`
-- files containing `secret`
-- files containing `token`
-- project `private` folders
+## Updates can't weaken this
 
-## Self-Improvement Safety
+Every auto-update runs a **gate self-test** (`python -m ernest.gate --selftest`) before
+it's allowed to install. A version that tried to open a hole fails the test and is
+rejected, then rolled back. See [updates.md](updates.md).
 
-The learning hook writes proposal candidates only. It does not modify skills or permissions.
+## Self-improvement safety
 
-Every improvement needs:
-
-- dry-run
-- approval level
-- rollback
-- north-star rationale
+Ernest can propose new skills and tuning, but adoption is a reviewed change with a
+rollback — it never auto-grants itself send rights, credentials, memory scope, or
+money/legal authority.

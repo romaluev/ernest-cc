@@ -49,10 +49,18 @@ All are remind/assign unless you ask for drafts.
 Use Claude when you want live mail/CRM search. Use `ernest start` when exports
 or sample data are enough.
 
+## First-time setup
+
+Run **`/ernest-setup`** in Claude (or `ernest onboard` in the terminal). Ernest asks a
+few plain questions and configures itself — local-first, nothing sent. Re-running it
+never overwrites what you've already set.
+
 ## Scheduling
 
-Templates in `~/.ernest-cc/` (`crontab.example`, `launchd.example.plist`) run
-`ernest start` on a schedule — no open Claude session required.
+Run **`ernest schedule`** once. Ernest then prepares your morning brief at 8:00 and
+checks for updates at 7:30, every day — no open Claude session required, nothing sent.
+Remove it anytime with `ernest schedule --remove`. (Under the hood it installs a
+launchd agent on macOS, or use `crontab ~/.ernest-cc/crontab.example` elsewhere.)
 
 ## Connectors
 
