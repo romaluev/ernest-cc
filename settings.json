@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/pre_tool_use.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/pre_tool_use.py\""
           }
         ]
       }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/capture_learnings.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/capture_learnings.py\""
           }
         ]
       }

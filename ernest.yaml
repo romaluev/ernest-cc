@@ -19,11 +19,36 @@ scope:
     - "memory/**"
     - "logs/**"
     - "${ERNEST_LOCAL_VAULT}/**"
+  # deny = absolute (read AND write). Secrets and credential material only.
   deny:
     - "**/.env"
+    - "**/env"
+    - "env"
     - "**/*secret*"
     - "**/*token*"
+    - "**/*credential*"
     - "**/private/**"
+    - "**/.mcp.json"
+    - ".mcp.json"
+    - "**/.ssh/**"
+    - "**/.aws/**"
+    - "**/id_rsa*"
+    - "**/id_ed25519*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/*.p12"
+    - "**/*.pfx"
+  # protect = write-deny only (stays readable). Guardrails the self-improvement
+  # loop must never be able to disarm, plus the tamper-evident audit logs.
+  protect:
+    - "ernest/gate.py"
+    - "hooks/**"
+    - "tests/**"
+    - "settings.json"
+    - "ernest.yaml"
+    - "logs/enforcement-audit.log"
+    - "logs/hygiene-audit.log"
+    - "scripts/self-update.sh"
 
 approval_defaults:
   reads: 0
