@@ -9,6 +9,13 @@
 SHELL=/bin/zsh
 ERNEST_HOME=$HOME/.ernest-cc
 
+# Daily safe auto-update CHECK, 07:30 (before the brief). Fetches from GitHub,
+# validates the new commit (health gauntlet + gate self-test) in a throwaway
+# worktree, and stages a one-tap card. It does NOT auto-install — reply
+# "apply update" or run `ernest update` to promote; auto-rollback on failure.
+# A canary/soak surface (e.g. a VPS) can use `update auto` to apply automatically.
+30 7 * * * "$ERNEST_HOME/bin/ernest" update check >> "$ERNEST_HOME/logs/cron.log" 2>&1
+
 # Morning brief, weekdays 08:00
 0 8 * * 1-5 "$ERNEST_HOME/bin/ernest" brief >> "$ERNEST_HOME/logs/cron.log" 2>&1
 
