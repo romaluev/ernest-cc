@@ -69,6 +69,69 @@ def load(cfg: Config) -> List[Concern]:
     return parse(cfg.concerns_file.read_text(encoding="utf-8"))
 
 
+@dataclass
+class ConcernsStatus:
+    count: int          # number of ENABLED concerns that will actually run
+    level: str          # "ok" | "warn" | "error"
+    message: str
+
+
+def status(cfg: Config) -> ConcernsStatus:
+    """Distinguish 'legitimately no concerns' from 'config is broken so reminders
+    are silently OFF'. The second case must be LOUD — otherwise the product goes
+    dark while doctor says 'ok' and the brief says 'inbox clean'.
+    """
+    path = cfg.concerns_file
+    if not path.is_file():
+        return ConcernsStatus(0, "warn",
+            "standing-concerns.md not found — no watch reminders are active. Run setup/onboarding.")
+    text = path.read_text(encoding="utf-8")
+    concerns = parse(text)
+    has_fence = _FENCE_RE.search(text) is not None
+    if concerns:
+        enabled = sum(1 for c in concerns if c.enabled)
+        if enabled == 0:
+            return ConcernsStatus(0, "error",
+                f"{len(concerns)} concern(s) defined but ALL are disabled — NO reminders will run.")
+        return ConcernsStatus(enabled, "ok", f"{enabled} active watch concern(s).")
+    # Zero concerns parsed — is the file broken, or genuinely empty?
+    if not has_fence:
+        if "- id:" in text or "playbook" in text or len(text.strip()) > 200:
+            return ConcernsStatus(0, "error",
+                "standing-concerns.md has content but its ```yaml block is missing/mis-typed — "
+                "ALL watch reminders are OFF. Fix the YAML fence (```yaml ... ```).")
+        return ConcernsStatus(0, "warn", "No watch concerns defined yet.")
+    if _yaml_block(text).strip():
+        return ConcernsStatus(0, "error",
+            "standing-concerns.md has a ```yaml block but no concerns could be parsed — "
+            "it is malformed, so ALL watch reminders are OFF.")
+    return ConcernsStatus(0, "warn", "standing-concerns.md ```yaml block is empty — no concerns defined.")
+
+
+def set_enabled(cfg: Config, concern_id: str, enabled: bool) -> bool:
+    """Flip a concern on/off in place — the simple rollback for an adopted automation.
+    Returns False if the concern id isn't found."""
+    if not cfg.concerns_file.is_file():
+        return False
+    text = cfg.concerns_file.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    in_target = False
+    found = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("- id:"):
+            in_target = stripped.split(":", 1)[1].strip() == concern_id
+        elif in_target and stripped.startswith("enabled:"):
+            indent = line[:len(line) - len(line.lstrip())]
+            lines[i] = f"{indent}enabled: {'true' if enabled else 'false'}"
+            found = True
+            in_target = False
+    if found:
+        cfg.concerns_file.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""),
+                                     encoding="utf-8")
+    return found
+
+
 def register(cfg: Config, concern: Concern) -> bool:
     """Append a concern into the YAML block. Returns False if id already exists."""
     text = cfg.concerns_file.read_text(encoding="utf-8")

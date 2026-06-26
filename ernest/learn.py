@@ -103,10 +103,18 @@ def _load_entries(cfg: Config) -> List[Dict[str, object]]:
 
 
 def _write_entries(cfg: Config, entries: List[Dict[str, object]]) -> None:
+    # Crash-safe rewrite (used only by adopt's status transition): write a temp
+    # file then atomically replace, so a crash can never truncate the log.
     cfg.logs_dir.mkdir(parents=True, exist_ok=True)
-    with _proposals_path(cfg).open("w", encoding="utf-8") as fh:
+    import os
+    final = _proposals_path(cfg)
+    tmp = final.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
         for entry in entries:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, final)
 
 
 def _slugify(text: str) -> str:

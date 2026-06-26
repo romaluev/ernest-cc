@@ -8,6 +8,7 @@ until approved).
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,21 +22,37 @@ def _first_name(contact: str) -> str:
     return (contact or "there").split()[0] if contact else "there"
 
 
+def _ceo_name(cfg: Config) -> str:
+    """The CEO's name from memory, for the signature. Never fabricate one."""
+    p = cfg.memory_dir / "ceo-persona.md"
+    if p.is_file():
+        m = re.search(r"^-\s*Name:\s*(.+)$", p.read_text(encoding="utf-8"), re.M)
+        if m:
+            name = m.group(1).strip()
+            if name and "onboarding" not in name.lower() and name != "(set during onboarding)":
+                return name.split()[0]
+    return ""
+
+
+def _clean_subject(subject: str) -> str:
+    s = (subject or "Following up").strip()
+    s = re.sub(r"^(re:\s*)+", "", s, flags=re.I).strip()  # avoid "Re: Re:"
+    return s or "Following up"
+
+
 def _draft_body(cfg: Config, item: WatchItem) -> str:
+    # IMPORTANT: never echo the recipient's inbound text or an internal summary
+    # into the reply — a draft may be forwarded. Reference our own topic only.
     t = item.thread
-    context = t.summary or "Picking this back up on our side."
-    conv = load_conversation(cfg, t.id)
-    if conv:
-        last = conv.last_inbound()
-        if last and last.body:
-            snippet = " ".join(last.body.split())[:200]
-            context = snippet + ("…" if len(last.body) > 200 else "")
+    topic = _clean_subject(t.subject) if t.subject else "this"
+    sig_name = _ceo_name(cfg)
+    signoff = f"Best,\n{sig_name}" if sig_name else "Best,\n[your name]"
     return (
         f"Hi {_first_name(t.contact)},\n\n"
-        f"Following up on your note from {t.last_inbound} - thanks for your patience. "
-        f"Re: {context}\n\n"
-        f"Happy to move this forward. Does a short call this week work, or shall I send details over email?\n\n"
-        f"Best,\nSam"
+        f"Following up on {topic} — thanks for your patience, and sorry for the delay on my side. "
+        f"I'd love to move this forward.\n\n"
+        f"Would a short call this week work, or would you prefer I send the details by email?\n\n"
+        f"{signoff}"
     )
 
 
@@ -49,7 +66,7 @@ def _draft_block(cfg: Config, item: WatchItem) -> str:
         f"source: {t.source}",
         thread_ref,
         f"context: inbound {t.last_inbound} - {item.reason}",
-        f"subject: Re: {t.subject or 'Following up'}",
+        f"subject: Re: {_clean_subject(t.subject)}",
         "",
         _draft_body(cfg, item),
         "",

@@ -7,12 +7,17 @@ Cards are remind/assign only — grading never sends or mutates anything.
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .config import Config, ensure_dirs
 from .grading import Grade, grade_b2b, grade_talent, pool_name
 from .sources import Contact, Thread, load_contacts, load_threads
+
+# Hiring/candidate threads are graded by the TALENT rubric, not as B2B sales leads —
+# keep them out of the buyer pipeline so a candidate never reads as a customer.
+_NON_B2B_RE = re.compile(r"(?i)(hire|hiring|candidate|applicant|recruit|resume|\bcv\b|\bintern|talent)")
 
 
 def _crm_index(cfg: Config) -> Dict[str, Contact]:
@@ -29,6 +34,8 @@ def grade_threads(cfg: Config) -> List[Tuple[Thread, Grade]]:
     crm = _crm_index(cfg)
     out: List[Tuple[Thread, Grade]] = []
     for t in load_threads(cfg):
+        if _NON_B2B_RE.search(" ".join(filter(None, [t.category, t.intent]))):
+            continue  # a hire/candidate thread, not a sales lead
         match = crm.get(t.company.lower()) or crm.get((t.contact or "").lower())
         grade = grade_b2b(
             company=t.company,

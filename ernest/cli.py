@@ -79,16 +79,25 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     missing = [name for name in ("company-core.md", "ceo-persona.md", "standing-concerns.md")
                if not (cfg.memory_dir / name).is_file()]
     connectors = _connectors(cfg) or ["(none - local exports only)"]
+    cst = concerns.status(cfg)
     enabled = [c.id for c in concerns.load(cfg) if c.enabled]
-    print("Ernest health check: ok" if not missing else "Ernest health check: degraded")
+    degraded = bool(missing) or cst.level == "error"
+    print("Ernest health check: ok" if not degraded else "Ernest health check: degraded")
     print(f"mode: {cfg.mode}")
     print(f"profile: {cfg.profile_dir}")
     print(f"vault: {cfg.vault_dir}")
     print(f"connectors: {', '.join(connectors)}")
     print(f"active concerns: {', '.join(enabled) or '(none)'}")
+    if cst.level != "ok":
+        marker = "ERROR" if cst.level == "error" else "note"
+        print(f"watch concerns [{marker}]: {cst.message}")
     if missing:
         print(f"missing memory files: {', '.join(missing)}")
         print("fix: restore them or run `./install.sh --refresh`.")
+        return 1
+    if cst.level == "error":
+        print("fix: your watch reminders are OFF. Tell Ernest to repair standing-concerns, "
+              "or run `/ernest-onboard` / setup again.")
         return 1
     issues = _diagnostics(cfg)
     if issues:
@@ -99,6 +108,86 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
               "research missing tools, and propose fixes (approval-gated).")
     else:
         print("\ndiagnostics: all clear.")
+    return 0
+
+
+def cmd_update(cfg: config.Config, args: argparse.Namespace) -> int:
+    import os
+    import subprocess
+    from pathlib import Path
+    src = os.environ.get("ERNEST_SRC_DIR", "").strip()
+    action = getattr(args, "action", None) or "apply"
+    if not src or not (Path(src) / ".git").exists():
+        print("Auto-update needs the Ernest source checkout (a git clone of ernest-core).")
+        print("The installer records it as ERNEST_SRC_DIR; set it, or run")
+        print("  scripts/self-update.sh", action, "from that checkout directly.")
+        return 1
+    script = Path(src) / "scripts" / "self-update.sh"
+    if not script.is_file():
+        print(f"self-update.sh not found at {script}")
+        return 1
+    return subprocess.run(["bash", str(script), action]).returncode
+
+
+def cmd_concern_toggle(cfg: config.Config, args: argparse.Namespace) -> int:
+    enabled = args._enable
+    ok = concerns.set_enabled(cfg, args.id, enabled)
+    if ok:
+        print(f"{'Enabled' if enabled else 'Disabled'} concern '{args.id}'."
+              + ("" if enabled else " It will stop producing reminders until re-enabled."))
+        return 0
+    print(f"No concern called '{args.id}'. See active ones with `ernest doctor`.")
+    return 1
+
+
+def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Install the daily morning brief + update check so Ernest runs on its own."""
+    import sys
+    import subprocess
+    from pathlib import Path
+    bin_path = cfg.profile_dir / "bin" / "ernest"
+    logs = cfg.profile_dir / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "darwin":
+        print("On this OS, scheduling uses cron. Install the bundled schedule with:")
+        print(f"  crontab {cfg.profile_dir}/crontab.example")
+        print("(weekday 08:00 brief, 11:00/16:00 watch, daily 07:30 update check)")
+        return 0
+    la = Path.home() / "Library" / "LaunchAgents"
+    la.mkdir(parents=True, exist_ok=True)
+    jobs = [
+        ("com.notiky.ernest.brief", f'"{bin_path}" start', 8, 0),
+        ("com.notiky.ernest.update", f'"{bin_path}" update check', 7, 30),
+    ]
+    remove = getattr(args, "remove", False)
+    for label, cmdline, hour, minute in jobs:
+        plist = la / f"{label}.plist"
+        subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
+        if remove:
+            try:
+                plist.unlink()
+            except FileNotFoundError:
+                pass
+            continue
+        plist.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+            '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+            '<plist version="1.0"><dict>\n'
+            f'  <key>Label</key><string>{label}</string>\n'
+            '  <key>ProgramArguments</key>\n'
+            f'  <array><string>/bin/zsh</string><string>-lc</string><string>{cmdline}</string></array>\n'
+            f'  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>{hour}</integer>'
+            f'<key>Minute</key><integer>{minute}</integer></dict>\n'
+            f'  <key>StandardOutPath</key><string>{logs}/launchd.log</string>\n'
+            f'  <key>StandardErrorPath</key><string>{logs}/launchd.err</string>\n'
+            '</dict></plist>\n', encoding="utf-8")
+        subprocess.run(["launchctl", "load", str(plist)], capture_output=True)
+    if remove:
+        print("Removed Ernest's morning schedule.")
+    else:
+        print("Done — Ernest will check your morning brief at 8:00 and look for updates at 7:30, every day.")
+        print("Nothing is sent; it only prepares what needs you. Remove anytime with `ernest schedule --remove`.")
     return 0
 
 
@@ -126,6 +215,10 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     prefs = preferences.load(cfg)
     auto_render = preferences.truthy(prefs.get("auto_render", "on")) and not os.environ.get("ERNEST_NO_RENDER")
     digest = render.run(cfg) if auto_render else None
+    cst = concerns.status(cfg)
+    if cst.level == "error":
+        print(f"⚠ Watch reminders are OFF — {cst.message}")
+        print("  (So 'nothing needs you' below may be wrong.) Ask Ernest to fix your standing concerns.")
     print(summary)
     if cards:
         print(f"{len(cards)} thing(s) need attention. Details: {cfg.watch_dir}")
@@ -366,6 +459,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_pf = sub.add_parser("prefs", help="show current engine preferences")
     p_pf.set_defaults(func=cmd_prefs)
+
+    p_dis = sub.add_parser("disable-concern", help="turn off an automation (rollback)")
+    p_dis.add_argument("id")
+    p_dis.set_defaults(func=cmd_concern_toggle, _enable=False)
+    p_en = sub.add_parser("enable-concern", help="turn an automation back on")
+    p_en.add_argument("id")
+    p_en.set_defaults(func=cmd_concern_toggle, _enable=True)
+
+    p_sch = sub.add_parser("schedule", help="run the morning brief + update check automatically (launchd/cron)")
+    p_sch.add_argument("--remove", action="store_true", help="remove the schedule")
+    p_sch.set_defaults(func=cmd_schedule)
+
+    p_up = sub.add_parser("update", help="safe auto-update from GitHub (validate + rollback)")
+    p_up.add_argument("action", nargs="?", choices=["check", "apply", "auto", "status"],
+                      default="apply", help="default: apply (one-tap)")
+    p_up.set_defaults(func=cmd_update)
     return parser
 
 
