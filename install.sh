@@ -48,12 +48,110 @@ link_to_path() {
   printf '%s' "$target"
 }
 
+# Crash-safe file copy: stage to a temp path on the same filesystem, then rename
+# over the destination (atomic). A crash mid-copy never leaves a half-written file.
+_swap_file() {
+  local rel="$1" stage
+  stage="$PROFILE_DIR/.stage-$(printf '%s' "$rel" | tr '/.' '__').$$"
+  cp "$ROOT/$rel" "$stage"
+  mv -f "$stage" "$PROFILE_DIR/$rel"
+}
+
+# Crash-safe directory replace: stage a full copy, swap the old aside, move the
+# new in, then delete the old. The only window is two renames, not an rm -rf gap.
+# NOTE: only ever touches CORE dirs — never memory/, data/, env, or .mcp.json.
+_swap_dir() {
+  local name="$1" stage old
+  stage="$PROFILE_DIR/.stage-$name.$$"
+  old="$PROFILE_DIR/.old-$name.$$"
+  rm -rf "$stage" "$old"
+  cp -R "$ROOT/$name" "$stage"
+  [ -e "$PROFILE_DIR/$name" ] && mv "$PROFILE_DIR/$name" "$old"
+  mv "$stage" "$PROFILE_DIR/$name"
+  rm -rf "$old"
+}
+
+# --- three-layer composition (core + custom overlay) -------------------------
+# Top-level skills/commands/agents are a COMPOSED VIEW of:
+#   core   = whatever ships in this repo ($ROOT)         [replaced on every refresh]
+#   custom = the CEO's own items under $PROFILE_DIR/custom [NEVER touched by refresh]
+# custom wins on a name clash, so the CEO can override a shipped skill without
+# editing core. memory/, data/, logs/, env, .mcp.json, custom/ are never replaced.
+OVERLAY_DIRS="skills commands agents"
+
+ensure_custom() {
+  local d
+  for d in $OVERLAY_DIRS; do mkdir -p "$PROFILE_DIR/custom/$d"; done
+  [ -f "$PROFILE_DIR/custom/README.md" ] || cat > "$PROFILE_DIR/custom/README.md" <<'EOF'
+# Ernest custom layer (yours — never overwritten by updates)
+
+Put your own skills/commands/agents here and they survive every update:
+  custom/skills/<your-skill>/SKILL.md
+  custom/commands/<your-command>.md
+  custom/agents/<your-agent>.md
+
+A custom item with the SAME name as a shipped one OVERRIDES it (custom wins).
+To tweak a shipped skill, copy it from skills/ into custom/skills/ and edit the copy.
+Config/permission overrides go in .claude/settings.local.json (merged by Claude Code).
+EOF
+}
+
+# Rescue any top-level item that is neither core-owned nor already in custom into
+# custom/ — so a skill the CEO dropped straight into skills/ is preserved forever.
+rescue_user_items() {
+  local name="$1" item base dest="$PROFILE_DIR/custom/$1"
+  [ -d "$PROFILE_DIR/$name" ] || return 0
+  mkdir -p "$dest"
+  for item in "$PROFILE_DIR/$name"/*; do
+    [ -e "$item" ] || continue
+    base="$(basename "$item")"
+    if [ ! -e "$ROOT/$name/$base" ] && [ ! -e "$dest/$base" ]; then
+      mv "$item" "$dest/$base"
+      printf '  rescued user %s/%s into custom/ (preserved across updates)\n' "$name" "$base"
+    fi
+  done
+}
+
+# Rebuild a top-level overlay dir = core items, then custom items (custom wins).
+# Crash-safe: build a staging dir, swap old aside, move new in, drop old.
+compose_overlay() {
+  local name="$1" stage old item base
+  stage="$PROFILE_DIR/.stage-$name.$$"
+  old="$PROFILE_DIR/.old-$name.$$"
+  rm -rf "$stage" "$old"
+  mkdir -p "$stage"
+  if [ -d "$ROOT/$name" ]; then
+    for item in "$ROOT/$name"/*; do [ -e "$item" ] && cp -R "$item" "$stage/"; done
+  fi
+  if [ -d "$PROFILE_DIR/custom/$name" ]; then
+    for item in "$PROFILE_DIR/custom/$name"/*; do
+      [ -e "$item" ] || continue
+      base="$(basename "$item")"
+      rm -rf "$stage/$base"
+      cp -R "$item" "$stage/$base"
+    done
+  fi
+  [ -e "$PROFILE_DIR/$name" ] && mv "$PROFILE_DIR/$name" "$old"
+  mv "$stage" "$PROFILE_DIR/$name"
+  rm -rf "$old"
+}
+
 copy_code() {
-  cp -R "$ROOT"/CLAUDE.md "$ROOT"/settings.json "$ROOT"/ernest.yaml "$PROFILE_DIR"/
-  rm -rf "$PROFILE_DIR/skills" "$PROFILE_DIR/commands" "$PROFILE_DIR/agents" "$PROFILE_DIR/hooks" "$PROFILE_DIR/ernest" "$PROFILE_DIR/.claude"
-  cp -R "$ROOT"/skills "$ROOT"/commands "$ROOT"/agents "$ROOT"/hooks "$ROOT"/ernest "$PROFILE_DIR"/
+  # Pure-core code/config: replaced wholesale (atomic). No user content lives here.
+  _swap_file CLAUDE.md
+  _swap_file settings.json
+  _swap_file ernest.yaml
+  _swap_dir hooks
+  _swap_dir ernest
   # Output styles make Claude answer in one consistent house format every turn.
-  cp -R "$ROOT"/.claude "$PROFILE_DIR"/
+  _swap_dir .claude
+  # Overlay dirs: compose core + custom so CEO additions/overrides always survive.
+  ensure_custom
+  local d
+  for d in $OVERLAY_DIRS; do
+    rescue_user_items "$d"
+    compose_overlay "$d"
+  done
 }
 
 write_launcher() {
@@ -107,9 +205,28 @@ health_check() {
   require_file "skills/lead-enrichment/SKILL.md"
   require_file "skills/deal-desk/SKILL.md"
   require_file "commands/ernest-brief.md"
+  require_file "scripts/self-update.sh"
+  require_file ".claude-plugin/plugin.json"
+  require_file ".claude-plugin/marketplace.json"
+  require_file "hooks/hooks.json"
+  require_file "hooks/session_context.py"
+  require_file ".claude/settings.json"
   printf 'Ernest health check: ok\n'
 }
 
+check_prereqs() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "Ernest needs python3, which isn't installed." >&2
+    printf '%s\n' "Install it (macOS: 'xcode-select --install' or python.org), then re-run." >&2
+    exit 1
+  fi
+  # npx/node only powers the optional local-memory MCP; warn, don't fail.
+  if [ "$MODE" = "local" ] && ! command -v npx >/dev/null 2>&1; then
+    printf '%s\n' "Note: 'npx' (Node) not found — the optional local memory server is skipped. Everything else works." >&2
+  fi
+}
+
+check_prereqs
 health_check
 
 if [ "$HEALTH_ONLY" = "1" ]; then
@@ -133,7 +250,10 @@ if [ ! -f "$MEMORY_FILE" ]; then
 fi
 
 copy_code
-cp -R "$ROOT"/memory "$ROOT"/data "$PROFILE_DIR"/
+# Seed memory/data ONLY on a first install — never clobber the CEO's memory or
+# data exports if they re-run plain ./install.sh. (--refresh never touches these.)
+[ -d "$PROFILE_DIR/memory" ] || cp -R "$ROOT"/memory "$PROFILE_DIR"/
+[ -d "$PROFILE_DIR/data" ] || cp -R "$ROOT"/data "$PROFILE_DIR"/
 write_launcher
 
 if [ "$MODE" = "vps" ]; then
@@ -182,9 +302,14 @@ ERNEST_MODE=$MODE
 ERNEST_PROFILE_DIR=$PROFILE_DIR
 ERNEST_LOCAL_VAULT=$VAULT_DIR
 ERNEST_LOCAL_MEMORY_FILE=$MEMORY_FILE
+ERNEST_SRC_DIR=$ROOT
+ERNEST_UPDATE_CHANNEL=${ERNEST_UPDATE_CHANNEL:-stable}
 ERNEST_BRAIN_URL=${ERNEST_BRAIN_URL:-}
 ERNEST_BRAIN_TOKEN=${ERNEST_BRAIN_TOKEN:-}
 EOF
+
+# Lock down anything that can hold a bearer token / secret to owner-only.
+chmod 600 "$PROFILE_DIR/env" "$PROFILE_DIR/.mcp.json" 2>/dev/null || true
 
 cat > "$PROFILE_DIR/launchd.example.plist" < "$ROOT/cron/com.notiky.ernest.example.plist"
 cat > "$PROFILE_DIR/crontab.example" < "$ROOT/cron/crontab.example"
