@@ -15,7 +15,9 @@ No config editing. Prompts: [docs/examples.md](docs/examples.md).
 ## What it does
 
 Remind/assign automations over email (and optional Slack tasks). Drafts only
-when you ask; the gate blocks sends and live CRM writes.
+when you ask; the gate blocks sends and live CRM writes. Answers stay **short and
+consistent** (Bottom line + Read-more digest) and **adapt to your taste** over
+time (`memory/preferences.md`).
 
 | Automation | Purpose |
 |---|---|

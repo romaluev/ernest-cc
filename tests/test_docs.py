@@ -38,6 +38,10 @@ REQUIRED_PROMPTS = [
     "/ernest-doctor",
     "/ernest-audit",
     "Don't stop at this week",
+    "ernest render",
+    "Bottom line",
+    "ernest feedback",
+    "memory/preferences.md",
 ]
 
 

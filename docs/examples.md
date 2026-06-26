@@ -10,6 +10,7 @@ see [connectors.md](connectors.md). Ernest does **not** use Composio.
 | Daily | `ernest start` |
 | Read full threads | `ernest read --owed` |
 | Grade inbound + talent | `ernest grade` |
+| Clean, consistent view | `ernest render --open` |
 | Talk to Ernest | open `~/.ernest-cc` in Claude Code |
 
 Most automations are **remind/assign only**. Drafts are optional and never sent
@@ -30,6 +31,47 @@ What needs me today?
 ```
 
 Same as `ernest start`.
+
+---
+
+### Short answers + "Read more" (and it adapts to you)
+
+You shouldn't read a wall of text or memorize commands. Two things keep it clean:
+
+1. **Short chat, depth on demand.** Ernest leads with the **Bottom line**, then
+   up to a few **who · action · why now** bullets, then a **Read more →** link to
+   a clean digest when there's more. A quick question gets a quick answer — no file.
+   Enforced by the output style (`.claude/output-styles/ernest.md`) + `CLAUDE.md`.
+2. **The digest** is generated deterministically, so it looks identical every time:
+
+```bash
+ernest render --open          # HTML; print to PDF from the browser
+ernest render --pdf --open    # also write a PDF if a renderer is on your machine
+```
+
+`ernest start` writes the digest automatically (turn off with `auto_render: off`).
+File: `~/ErnestVault/Ernest/00-Daily/digest--<date>.html`.
+
+**Tell it what you like — it remembers.** Ernest adapts instead of making you repeat yourself:
+
+```text
+Too long. Keep answers to 4 bullets and link the rest.
+```
+
+```text
+Prefer a PDF I can forward. And stop showing me trash-tier leads.
+```
+
+Ernest updates `memory/preferences.md` (reversible) and honors it from then on.
+From the terminal you can also log a quick note or see current settings:
+
+```bash
+ernest feedback "answers too long, 4 bullets max"
+ernest prefs
+```
+
+You rarely need commands at all — just talk to it. It runs `ernest start`,
+`grade`, `read`, `render` for you. If an answer ever drifts, say **"Use the house format."**
 
 ---
 

@@ -82,6 +82,25 @@ Tier-1 countries), or just tell Ernest "change our talent focus to X". Re-run:
 ernest grade
 ```
 
+## Answers too long, messy, or not to your taste
+
+Ernest leads with a short **Bottom line**, a few action bullets, then a
+**Read more →** link — via the Claude Code output style
+(`.claude/output-styles/ernest.md`) and `CLAUDE.md`. To adjust:
+
+- Just tell it: **"too long, 4 bullets"**, **"prefer PDF"**, **"hide trash tier"**.
+  Ernest updates `memory/preferences.md` and honors it from then on.
+- Snap a drifting reply back with **"Use the house format."**
+- Confirm the style is active: in Claude run `/output-style` → pick `ernest`
+  (auto-selects from `settings.json`; a new session or `/clear` applies it).
+- See or edit current settings: `ernest prefs` / `memory/preferences.md`.
+- For a shareable, identical-every-time view: `ernest render --open`
+  (`--pdf` if you want a PDF, else print to PDF from the browser). The digest
+  (`00-Daily/digest--<date>.html`) is generated deterministically.
+
+To stop the auto-digest on `ernest start`, set `auto_render: off` in
+`memory/preferences.md`.
+
 ## Cowork differs from Claude Code
 
 Use Claude Code as the bootstrap surface. Same plugin; verify connectors on your build.

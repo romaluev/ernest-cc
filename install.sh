@@ -50,8 +50,10 @@ link_to_path() {
 
 copy_code() {
   cp -R "$ROOT"/CLAUDE.md "$ROOT"/settings.json "$ROOT"/ernest.yaml "$PROFILE_DIR"/
-  rm -rf "$PROFILE_DIR/skills" "$PROFILE_DIR/commands" "$PROFILE_DIR/agents" "$PROFILE_DIR/hooks" "$PROFILE_DIR/ernest"
+  rm -rf "$PROFILE_DIR/skills" "$PROFILE_DIR/commands" "$PROFILE_DIR/agents" "$PROFILE_DIR/hooks" "$PROFILE_DIR/ernest" "$PROFILE_DIR/.claude"
   cp -R "$ROOT"/skills "$ROOT"/commands "$ROOT"/agents "$ROOT"/hooks "$ROOT"/ernest "$PROFILE_DIR"/
+  # Output styles make Claude answer in one consistent house format every turn.
+  cp -R "$ROOT"/.claude "$PROFILE_DIR"/
 }
 
 write_launcher() {
@@ -86,6 +88,12 @@ health_check() {
   require_file "hooks/capture_learnings.py"
   require_file "ernest/cli.py"
   require_file "ernest/gate.py"
+  require_file "ernest/render.py"
+  require_file "ernest/preferences.py"
+  require_file "ernest/feedback.py"
+  require_file "memory/preferences.md"
+  require_file "skills/ernest-preferences/SKILL.md"
+  require_file ".claude/output-styles/ernest.md"
   require_file "docs/examples.md"
   require_file "docs/connectors.md"
   require_file "docs/quickstart.md"

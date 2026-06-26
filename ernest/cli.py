@@ -12,6 +12,9 @@
     ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
     ernest read [--owed] [--thread ID] cache full thread bodies to vault
     ernest grade [--b2b] [--talent]    tier inbound leads + talent (ICP rubrics)
+    ernest render [--open] [--pdf]      clean, consistent digest of today (read more)
+    ernest feedback "..."             record what to change about answers/work
+    ernest prefs                       show current engine preferences
 
 Local-first: every command works with no VPS and no live connectors, reading
 exported data under `data/`. Nothing here ever sends.
@@ -20,12 +23,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from . import __version__, config
-from . import (automations, audit, brief, concerns, draft, grade_run, learn,
-               onboard, read_threads, watch)
+from . import (automations, audit, brief, concerns, draft, feedback, grade_run,
+               learn, onboard, preferences, read_threads, render, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -119,10 +123,15 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     cards = watch.run(cfg)
     grade_run.run(cfg)
     path, summary = brief.run(cfg)
+    prefs = preferences.load(cfg)
+    auto_render = preferences.truthy(prefs.get("auto_render", "on")) and not os.environ.get("ERNEST_NO_RENDER")
+    digest = render.run(cfg) if auto_render else None
     print(summary)
     if cards:
         print(f"{len(cards)} thing(s) need attention. Details: {cfg.watch_dir}")
     print(f"Full brief: {path}")
+    if digest:
+        print(f"Read more (clean digest): {digest}")
     return 0
 
 
@@ -187,6 +196,48 @@ def cmd_read(cfg: config.Config, args: argparse.Namespace) -> int:
     print(f"Read: cached {len(paths)} thread(s) to 00-Threads/")
     for path in paths:
         print(f"  - {path}")
+    return 0
+
+
+def cmd_render(cfg: config.Config, args: argparse.Namespace) -> int:
+    path = render.run(cfg)
+    print(f"Render: wrote a consistent HTML digest.\n  - {path}")
+    want_pdf = args.pdf or preferences.load(cfg).get("read_more_format", "html").lower() == "pdf"
+    if want_pdf:
+        pdf = render.to_pdf(path)
+        if pdf:
+            print(f"  - {pdf}")
+            path = pdf
+        else:
+            print("  - PDF tool not found; open the HTML and use Print -> Save as PDF.")
+    if args.open:
+        if render.open_in_browser(path):
+            print("Opened in your browser.")
+        else:
+            print(f"Open it manually: {path}")
+    else:
+        print("Open it in a browser, or run `ernest render --open`.")
+    return 0
+
+
+def cmd_feedback(cfg: config.Config, args: argparse.Namespace) -> int:
+    note = " ".join(args.note).strip()
+    if not note:
+        print("Tell me what to change, e.g. `ernest feedback \"answers too long\"`.")
+        return 2
+    feedback.record(cfg, note)
+    print("Noted. I logged your feedback and will fold it into how I work.")
+    print(f"  - log: {feedback.log_path(cfg)}")
+    print("  - lasting preferences live in memory/preferences.md (ask me to update them).")
+    return 0
+
+
+def cmd_prefs(cfg: config.Config, args: argparse.Namespace) -> int:
+    prefs = preferences.load(cfg)
+    print("Current engine preferences:")
+    for key, val in prefs.items():
+        print(f"  - {key}: {val}")
+    print(f"Edit the narrative + settings in {cfg.memory_dir / 'preferences.md'}.")
     return 0
 
 
@@ -303,6 +354,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_gr.add_argument("--b2b", action="store_true", help="grade B2B leads only")
     p_gr.add_argument("--talent", action="store_true", help="grade talent only")
     p_gr.set_defaults(func=cmd_grade)
+
+    p_re = sub.add_parser("render", help="clean, consistent HTML digest of today")
+    p_re.add_argument("--open", action="store_true", help="open the digest in a browser")
+    p_re.add_argument("--pdf", action="store_true", help="also export a PDF (best-effort)")
+    p_re.set_defaults(func=cmd_render)
+
+    p_fb = sub.add_parser("feedback", help="tell Ernest what to change about its answers/work")
+    p_fb.add_argument("note", nargs="*", help="free text, e.g. \"answers too long\"")
+    p_fb.set_defaults(func=cmd_feedback)
+
+    p_pf = sub.add_parser("prefs", help="show current engine preferences")
+    p_pf.set_defaults(func=cmd_prefs)
     return parser
 
 

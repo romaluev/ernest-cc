@@ -6,9 +6,17 @@
 ernest start
 ```
 
-Watch + brief. Cards land in `~/ErnestVault/Ernest/00-Watch/`. Nothing sends.
+Watch + brief. Cards land in `~/ErnestVault/Ernest/00-Watch/`, and a clean
+**digest** (the "Read more" view) in `00-Daily/digest--<date>.html`. Nothing sends.
 
 Prompts for Claude: [examples.md](examples.md).
+
+## Readable, adaptive answers
+
+In Claude, answers are **short by default** — Bottom line, a few action bullets,
+then a **Read more →** link to the digest. Tell Ernest what you like and it
+remembers (`memory/preferences.md`): "too long, 4 bullets", "prefer PDF",
+"hide trash tier". You rarely need commands — just talk to it.
 
 ## What runs automatically
 
@@ -32,6 +40,8 @@ All are remind/assign unless you ask for drafts.
 | Task | In Claude | Terminal |
 |---|---|---|
 | Daily | "What needs me today?" / `/ernest-brief` | `ernest start` |
+| Clean / shareable view | "show today's digest" | `ernest render --open` (`--pdf`) |
+| Tune answers | "too long, prefer PDF" | `ernest feedback "..."` / `ernest prefs` |
 | Draft (optional) | `draft these` / `/ernest-draft` | `ernest draft --concern <id>` |
 | New automation | `/ernest-new-automation` | `ernest new-automation ...` |
 | Learning | `/ernest-learn` | `ernest learn` |

@@ -22,6 +22,7 @@ version: 1.0.0
 | `talent-sourcing-grading` | (grade) | Tier talent, ex-Skolkovo pool | grade |
 | `ernest-watch` | (orchestration) | Run all concerns | remind |
 | `ernest-self-repair` | (meta) | Diagnose + fix/extend Ernest itself | repair |
+| `ernest-preferences` | (meta) | Learn + apply CEO's format/autonomy taste | adapt |
 | `ernest-use-case-author` | (meta) | Propose new automations | proposal |
 
 ## Routing
@@ -40,5 +41,7 @@ version: 1.0.0
 - Something broken / tool missing / "fix it" → `ernest-self-repair` / `/ernest-doctor`
 - New automation → `ernest-use-case-author` or `ernest new-automation`
 - Change ICP / grading / talent pool → edit `data/grading/*.json` + `memory/icp-*.md`, re-run `ernest grade`
+- Clean/shareable view of today, or "answers are messy" → `ernest render --open` (HTML digest); chat answers follow the `CLAUDE.md` house format
+- "Too long" / "prefer PDF" / "just do it, don't make me run commands" → `ernest-preferences` (update `memory/preferences.md`, honor it, `ernest feedback`)
 
 Prompts: `docs/examples.md`. Connectors: `docs/connectors.md` (native MCP; no Composio).
