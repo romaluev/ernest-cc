@@ -47,7 +47,8 @@ def grade_threads(cfg: Config) -> List[Tuple[Thread, Grade]]:
             cfg=cfg,
         )
         out.append((t, grade))
-    out.sort(key=lambda pair: (pair[1].rank, -(pair[0].days_waiting(cfg.today))))
+    # Tier first, then strongest match (score), then who's waited longest.
+    out.sort(key=lambda pair: (pair[1].rank, -pair[1].score, -(pair[0].days_waiting(cfg.today))))
     return out
 
 
@@ -68,12 +69,14 @@ def grade_sourcing(cfg: Config) -> List[Tuple[dict, Grade]]:
                 cfg=cfg,
             )
             out.append((row, grade))
-    out.sort(key=lambda pair: pair[1].rank)
+    # Tier first, then strongest match (score), then name — so the best
+    # candidates lead each tier instead of appearing in arbitrary CSV order.
+    out.sort(key=lambda pair: (pair[1].rank, -pair[1].score, (pair[0].get("name") or "").lower()))
     return out
 
 
 def _grade_lines(grade: Grade) -> List[str]:
-    lines = [f"- tier: {grade.tier} (confidence: {grade.confidence})"]
+    lines = [f"- tier: {grade.tier} (confidence: {grade.confidence}, match score: {int(grade.score)})"]
     if grade.reasons:
         lines.append(f"- why: {'; '.join(grade.reasons)}")
     if grade.flags:

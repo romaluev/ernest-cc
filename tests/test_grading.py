@@ -84,6 +84,34 @@ def test_talent() -> None:
     check("thin profile flagged", bool(g.flags))
 
 
+def test_scoring_breadth_and_sorting() -> None:
+    """The team's complaint: too narrow, too few, badly sorted. Verify the fixes."""
+    from ernest.grading import grade_b2b, grade_talent
+
+    # Density: more signals -> higher score (so it ranks first within a tier).
+    strong = grade_b2b(company="NVIDIA", text="enterprise rollout, contract, RFP", category="ai studio")
+    weakish = grade_b2b(company="OpenAI", text="exploring a collaboration")
+    check("multi-signal lead outscores single-signal", strong.score > weakish.score)
+    check("both still tier-1", strong.tier == "tier-1" and weakish.tier == "tier-1")
+
+    # Abbreviation matching: 'Sr. ML Engineer' should resolve like senior + machine learning.
+    g = grade_talent(name="X", company="Google", title="Sr. ML Engineer",
+                     profile="text-to-video research, US")
+    check("abbrev 'Sr. ML' surfaces as tier-1", g.tier == "tier-1" and g.score > 0)
+
+    # Breadth: a broadened big-tech name (DeepMind) now surfaces instead of vanishing.
+    g = grade_talent(name="Y", company="DeepMind", title="Research Scientist",
+                     profile="diffusion models")
+    check("broadened company (DeepMind) surfaces (not tier-3)", g.tier in ("tier-1", "tier-2"))
+
+    # Sorting: within tier-2, denser profile scores higher.
+    a = grade_talent(name="A", company="Stripe", title="Product Manager",
+                     profile="go-to-market, growth, US startup, series b")
+    b = grade_talent(name="B", company="SomeCo", title="Product Manager", profile="product manager")
+    check("denser tier-2 profile scores higher (better sort)",
+          a.tier == "tier-2" and b.tier in ("tier-2", "tier-3") and a.score > b.score)
+
+
 def test_cards() -> None:
     profile = Path(tempfile.mkdtemp(prefix="ernest_grade_"))
     vault = Path(tempfile.mkdtemp(prefix="ernest_grade_vault_"))
@@ -153,6 +181,7 @@ def test_self_repair_doctor() -> None:
 def main() -> int:
     test_b2b()
     test_talent()
+    test_scoring_breadth_and_sorting()
     test_cards()
     test_self_repair_doctor()
     if FAILURES:

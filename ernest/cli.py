@@ -87,6 +87,8 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     print(f"profile: {cfg.profile_dir}")
     print(f"vault: {cfg.vault_dir}")
     print(f"connectors: {', '.join(connectors)}")
+    onboarded = (cfg.vault_dir / ".onboarded").is_file()
+    print(f"onboarded: {'yes' if onboarded else 'no — running on SAMPLE data; run /ernest-setup to personalize'}")
     print(f"active concerns: {', '.join(enabled) or '(none)'}")
     if cst.level != "ok":
         marker = "ERROR" if cst.level == "error" else "note"
@@ -225,6 +227,9 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     print(f"Full brief: {path}")
     if digest:
         print(f"Read more (clean digest): {digest}")
+    if not (cfg.vault_dir / ".onboarded").is_file():
+        print("\nℹ This is SAMPLE data (placeholder company/people). Run `/ernest-setup` "
+              "(or `ernest onboard`) to make it yours — then it's your real inbox/CRM.")
     return 0
 
 
