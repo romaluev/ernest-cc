@@ -1,43 +1,60 @@
-# Using Ernest on Codex
+# Run Ernest in Codex
 
-Yes — Ernest runs on **OpenAI Codex CLI** too, as a thin adapter over the same core
-(engine + memory + skills). One brain, three bodies: Claude Code/Cowork, Hermes/VPS
-(Telegram), and Codex.
+Ernest runs on the **OpenAI Codex CLI** as a thin adapter over the same core (engine
++ memory + skills). Same brain, different body. Best for Codex users who want the
+local watch-and-draft work; for live *sending*, use Claude Code or Hermes (see Safety).
 
-## Set it up (one command)
+## Quick start
 
 ```bash
 bash adapters/codex/setup-codex.sh
 cd ~/.ernest-cc && codex --profile ernest
 ```
 
-Then talk to it, or use `/ernest-brief`, `/ernest-grade`, `/ernest-draft`,
-`/ernest-doctor`, `/ernest-setup`. The setup is idempotent and only adds an `ernest`
-profile + prompts + MCP + `AGENTS.md` — it won't disturb your existing Codex config.
+Setup is idempotent — it only adds an `ernest` profile, prompts, MCP, and `AGENTS.md`;
+it won't disturb your existing Codex config.
 
-## What you get
+## Try these (2–3 requests)
 
-The local engine (watch, brief, grade/rank, read threads, prepare drafts), your full
-memory, and draft-first behavior — all local-first.
+```text
+What needs me today?
+```
 
-## Important: safety differs from the Claude build
+```text
+Read the thread with <person/company> and draft a reply in my voice.
+```
 
-Ernest's strongest safety — a deterministic gate that blocks unsafe actions in code —
-is a **Claude Code/Cowork feature** (a PreToolUse hook). **Codex has no equivalent
-hook**, so on Codex draft-first is enforced by:
+```text
+Grade the new inbound leads and talent against my ICP, best first.
+```
+
+Or use the slash commands: `/ernest-brief`, `/ernest-grade`, `/ernest-draft`,
+`/ernest-doctor`, `/ernest-setup`.
+
+## Safety — read this
+
+Ernest's strongest protection — a deterministic gate that blocks unsafe actions in
+code — is a **Claude Code/Cowork feature** (a PreToolUse hook). **Codex has no
+equivalent hook.** On Codex, draft-first is enforced by three softer layers:
 
 1. a strict `AGENTS.md` (draft-first, safe-tools-only),
 2. Codex's own `sandbox_mode = workspace-write` + `approval_policy = on-request`, and
-3. draft-first MCP servers only (the brain has no send tools).
+3. draft-first MCP servers only (the brain exposes no send tools).
 
-So on Codex, **don't wire in raw send-capable connectors** — that would bypass the
-protections. For live *sending* of email/Slack/CRM, use the **Claude Code build**
-(deterministic gate) or the **Telegram bot**. Codex is great for the local,
-read-and-draft work.
+So on Codex, **don't wire in raw send-capable connectors** — that bypasses the
+protections. For live sending of email/Slack/CRM, use the **Claude Code** build
+(deterministic gate) or **[Hermes](hermes.md)** (Telegram). Codex is for the local,
+read-and-draft work. Adapter internals: [`../adapters/codex/README.md`](../adapters/codex/README.md).
 
-Details + the adapter internals: [`adapters/codex/README.md`](../adapters/codex/README.md).
+## On your phone / remote
 
-## Remote / phone
+The Codex mobile app won't run Ernest. Two paths for mobile/remote use:
 
-Codex mobile won't run Ernest. For remote access, use the **Telegram bot** (the VPS
-build) — that's "Ernest on your phone" today. See [vps-brain.md](vps-brain.md).
+1. **Always-on desktop.** Keep a desktop running and remote into it from your phone.
+2. **Use [Hermes](hermes.md) instead** — the Telegram bot is natively mobile and 24/7.
+
+## Where next
+
+- [hermes.md](hermes.md) — the mobile / 24/7 surface
+- [examples.md](examples.md) — more prompts
+- [daily-use.md](daily-use.md) — driving it day to day

@@ -14,6 +14,17 @@ sends anything on its own. Local-first: your memory stays on your machine.
 | **Use it day to day** | [daily-use.md](daily-use.md) |
 | **See example prompts** (simple → complex) | [examples.md](examples.md) |
 
+## Run it on your surface
+
+Same Ernest, different body. Each guide has a quick start and a few example requests.
+
+| Surface | Guide | Good for |
+|---|---|---|
+| **Claude Code** (terminal/IDE) | [claude-code.md](claude-code.md) | Power users; full safety gate + live tools |
+| **Claude Cowork** (desktop app) | [cowork.md](cowork.md) | No terminal — just chat |
+| **Codex** (OpenAI CLI) | [codex.md](codex.md) | Codex users; local read-and-draft |
+| **Hermes** (Telegram, 24/7) | [hermes.md](hermes.md) | Mobile + overnight watch |
+
 ## Reference
 
 | Doc | Purpose |
@@ -21,7 +32,6 @@ sends anything on its own. Local-first: your memory stays on your machine.
 | [privacy.md](privacy.md) | What stays on your machine (and what doesn't) |
 | [updates.md](updates.md) | How updates work — one-tap, validated, auto-rollback |
 | [connectors.md](connectors.md) | Connect Gmail / Slack / CRM (native MCP, not Composio) |
-| [codex.md](codex.md) | Use Ernest on OpenAI Codex CLI (adapter + safety notes) |
 | [add-automation.md](add-automation.md) | Add a new thing for Ernest to watch |
 | [security.md](security.md) | The safety gate and approval levels |
 | [troubleshooting.md](troubleshooting.md) | When something looks off |

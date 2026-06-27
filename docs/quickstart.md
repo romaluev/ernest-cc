@@ -47,6 +47,11 @@ You don't update by hand. Ernest checks for updates, validates them, and shows a
 one-tap **"apply update"** card; it auto-rolls-back on any problem and never touches
 your memory. See [updates.md](updates.md).
 
+## Running somewhere other than Claude?
+
+Same Ernest, per-surface quick starts: [claude-code.md](claude-code.md) ·
+[cowork.md](cowork.md) · [codex.md](codex.md) · [hermes.md](hermes.md) (Telegram, mobile/24-7).
+
 ## Where next
 
 - [how-it-works.md](how-it-works.md) — the two-minute mental model (with diagrams)

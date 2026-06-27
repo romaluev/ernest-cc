@@ -1,53 +1,53 @@
-# Ernest — the teammate guidebook
+# Ernest — how it works
 
-For anyone who needs to **demo Ernest, sell it, and answer questions** — even if you've
-never touched automations, n8n, Hermes, or Claude. Read this once and you'll be able to
-run the demo and field the "but how does it…?" questions with confidence. No jargon.
+A plain explanation of what Ernest is, how it operates, where it runs, and how it
+stays safe. No prior knowledge of automations, MCP, Hermes, or Claude assumed.
 
 ---
 
-## 1. What Ernest is (say this in one breath)
+## What Ernest is
 
-> Ernest is an AI **chief of staff**. It quietly watches the tools a busy founder already
-> lives in — email, CRM, Slack, calendar — tells them what actually needs them, drafts
-> the replies and outreach when asked, and **never sends anything without approval.** By
-> default everything stays on the person's own machine.
+Ernest is a draft-first **chief of staff**. It watches the tools a busy founder
+already lives in — email, CRM, Slack, calendar — surfaces what genuinely needs them,
+and prepares replies and outreach on request. It does not send, post, or change any
+external system on its own. By default everything stays on the user's machine.
 
-It is **not** a chatbot you have to babysit, and **not** a brittle automation that fires
-blindly. It's an assistant that *prepares* the work and hands it to you to approve.
+It is not a chatbot you have to drive turn by turn, and not a rules-based automation
+that fires blindly. It reads, reasons, and *prepares* work for a human to approve.
 
 ```mermaid
 flowchart LR
-    you([The founder]) -- "plain English" --> E((Ernest))
+    you([You]) -- "plain English" --> E((Ernest))
     E -- "reads" --> tools["Email · CRM · Slack · Calendar"]
     tools -- "what needs you" --> E
     E -- "reminds · drafts · preps" --> you
-    E -- "learns your taste" --> mem[("Memory — stays with you")]
+    E -- "learns your preferences" --> mem[("Memory — stays with you")]
     classDef hi fill:#1d3557,color:#fff
     class E hi
 ```
 
 ---
 
-## 2. How it works (the mental model)
+## How it works: three verbs
 
-There are only three verbs. Everything Ernest does is one of them:
+Everything Ernest does is one of three things:
 
-1. **Watch** — automatically (or when you ask "what needs me?"). It scans your tools and
-   surfaces open loops: dropped follow-ups, quiet deals, threads you owe, promises you
-   made. This is **remind-only** — it never acts here.
-2. **Draft** — only when you ask ("draft these", "reply to Acme"). It writes the messages,
-   in your voice, grounded in the real thread — and shows them to you.
-3. **Send** — always **you**. Ernest hands you a finished draft; you press send.
+1. **Watch** — on a schedule, or when asked ("what needs me?"). It scans connected
+   tools and surfaces open loops: dropped follow-ups, quiet deals, threads you owe,
+   promises you made. This is remind-only; it never acts here.
+2. **Draft** — only when asked ("draft these", "reply to Acme"). It writes messages
+   in the user's voice, grounded in the real thread, and shows them for review.
+3. **Send** — always the human. Ernest hands over a finished draft; a person sends it.
 
-That third line is the whole trust story: **Ernest cannot send, post, or change a system
-on its own.** (Section 5 explains how that's *enforced*, not just promised.)
+The third line is the core property: **Ernest cannot send, post, or change a system
+on its own.** The Safety model section below explains how that is enforced in code,
+not just stated as policy.
 
 ---
 
-## 3. The request lifecycle (what happens when you ask it something)
+## The request lifecycle
 
-Say you ask: *"Who did I drop the ball with?"* Here's the full journey:
+What happens on a request like *"Who did I drop the ball with?"*:
 
 ```mermaid
 sequenceDiagram
@@ -55,59 +55,57 @@ sequenceDiagram
     participant Ernest
     participant Tools as "Your tools (email/CRM/Slack/cal)"
     You->>Ernest: "Who did I drop the ball with?"
-    Ernest->>Tools: search WIDE across every connected tool
+    Ernest->>Tools: search across every connected tool
     Tools-->>Ernest: candidate dropped threads
-    Ernest->>Tools: CROSS-CHECK each — already handled elsewhere?
+    Ernest->>Tools: cross-check each — already handled elsewhere?
     Note over Ernest: drop anything resolved in Slack / closed in CRM / met on calendar
     Ernest->>You: ranked list of what's genuinely open (+ proposed CRM fixes)
     You->>Ernest: "draft replies for the top 3"
     Ernest->>You: 3 drafts in your voice, for review
-    You->>You: approve → send (in your own app)
+    You->>You: approve and send (in your own app)
 ```
 
-The non-obvious bit teammates should highlight: **Ernest searches every tool and
-cross-checks for resolution before it bothers you.** A thread that looks unanswered in
-email may already be resolved in Slack or closed in the CRM — Ernest checks and suppresses
-it. That's what makes it feel like a real chief of staff instead of a dumb reminder.
+The notable part is the cross-check: a thread that looks unanswered in email may
+already be resolved in Slack or closed in the CRM. Ernest checks the other tools
+before flagging something, so it surfaces genuinely-open items rather than noise.
 
 ---
 
-## 4. Where it runs (the three surfaces — same brain)
+## Where it runs
 
-The same Ernest shows up in three places. Pick whichever suits the moment:
+The same Ernest runs on four surfaces. Each has its own quick-start guide.
 
 ```mermaid
 flowchart TB
-    core["ONE Ernest core<br/>(identity · skills · safety · memory)"]
-    core --> cc["Claude Code<br/>(power user, terminal)"]
-    core --> cw["Cowork<br/>(desktop app, no terminal)"]
-    core --> tg["Telegram / Slack<br/>(phone + 24/7, via a server)"]
+    core["One Ernest core<br/>(identity · skills · safety · memory)"]
+    core --> cc["Claude Code<br/>(terminal/IDE)"]
+    core --> cw["Cowork<br/>(desktop app)"]
+    core --> cx["Codex<br/>(OpenAI CLI)"]
+    core --> tg["Hermes / Telegram<br/>(mobile + 24/7)"]
     classDef c fill:#2a6f4b,color:#fff
     class core c
 ```
 
-- **Claude Code** — for power users at a keyboard.
-- **Cowork** — the desktop app; no terminal, just chat.
-- **Telegram** (running on a small always-on server) — Ernest on your **phone**, and it
-  keeps watching **overnight** while your laptop sleeps. This is the live demo surface.
+- **[Claude Code](claude-code.md)** — terminal/IDE; the full safety gate and live tools.
+- **[Cowork](cowork.md)** — the desktop app; no terminal, just chat.
+- **[Codex](codex.md)** — the OpenAI CLI; local read-and-draft (softer safety — see its guide).
+- **[Hermes](hermes.md)** — a Telegram bot on a small server; the only mobile, 24/7 surface.
 
-They share the same DNA. You can also connect a laptop surface to the server's
-**shared brain** so they share one *memory, reminder cards, and drafts* — ask
-`/ernest-connect-brain` (and `/ernest-go-local` to disconnect). Sharing live
-*account reads* through the server is the next wiring step. See
-[plus-vps.md](plus-vps.md).
+They share the same core. A laptop surface can also connect to the server's brain
+(`/ernest-connect-brain`) to share one memory, reminder set, and draft store —
+see [plus-vps.md](plus-vps.md).
 
 ---
 
-## 5. How it's safe (the part that closes deals)
+## Safety model
 
-Ernest's safety is **not** the AI promising to behave. It's a piece of plain code — the
-**gate** — that runs *before every single action* and blocks first, asks questions later.
+Ernest's safety is a piece of plain code — the **gate** — that runs before every
+action and denies by default. It is not the model promising to behave.
 
 ```mermaid
 flowchart TD
     A["Ernest wants to do something"] --> B{"Is it a live action?<br/>(send / post / pay / change CRM)"}
-    B -- yes --> D["BLOCKED — turned into a draft for you"]
+    B -- yes --> D["Blocked — turned into a draft for review"]
     B -- no --> C{"Reading a secret or<br/>reaching the internet on its own?"}
     C -- yes --> D
     C -- no --> G["Allowed (read / summarize / draft)"]
@@ -117,51 +115,55 @@ flowchart TD
     class G ok
 ```
 
-Say it plainly to a prospect:
-- **It can't send or change anything without you** — that's enforced in code, not a setting.
-- **Even a malicious email** that says "send this now" can't make it act — the worst case
-  is a draft you review.
-- **Your data stays on your machine** by default; no Ernest cloud.
-- **It can't even weaken its own rules** — the safety code is locked from itself.
+In practice:
+
+- Sends and live CRM writes are blocked in code and become drafts — regardless of
+  what the model is asked to do, including by a malicious email.
+- Data stays on the user's machine by default; there is no Ernest cloud.
+- The safety code is protected from Ernest itself, so it cannot weaken its own rules.
+
+The strongest enforcement (a deterministic PreToolUse hook) runs on **Claude Code**
+and **Cowork**. **Codex** uses softer layers (a strict `AGENTS.md` + the CLI's own
+sandbox/approval), so live sending is left to Claude Code or Hermes. **Hermes** runs
+its own server-side gate and a brain contract that exposes no send tool at all.
 
 ---
 
-## 6. How it scales (the roadmap you can pitch)
+## How it scales
 
-Start as a single local assistant; grow it on three independent axes — **reach**, **memory**,
-**abilities** — as far as the company wants.
+Ernest starts as a single local assistant and grows along three independent axes —
+**reach**, **memory**, and **abilities** — as far as needed. None of these is a
+one-way door; posture changes with a setting, not a migration.
 
 ```mermaid
 flowchart LR
-    T0["Today: one laptop<br/>local, private"] --> R["+ Reach: a server →<br/>24/7 + Telegram"]
-    T0 --> M["+ Memory: an Obsidian<br/>vault / shared brain"]
-    T0 --> A["+ Abilities: more tools,<br/>self-grown skills, sub-agents"]
+    T0["Today: one machine<br/>local, private"] --> R["+ Reach: a server →<br/>24/7 + Telegram"]
+    T0 --> M["+ Memory: a shared<br/>vault / brain"]
+    T0 --> A["+ Abilities: more tools,<br/>new skills, sub-agents"]
 ```
 
-Nothing here is a one-way door — you change posture with a setting, not a migration.
-
 ---
 
-## 7. The agent lifecycle (how it gets better over time)
+## How it improves over time
 
-Ernest grows new abilities the more it's used — safely:
+New abilities are added the same way: noticed, proposed, reviewed, adopted.
 
 ```mermaid
 flowchart LR
-    notice["You do something repeatedly"] --> propose["Ernest proposes a new skill"]
-    propose --> review{"You review the change"}
+    notice["A task recurs"] --> propose["Ernest proposes a new skill"]
+    propose --> review{"Human reviews the change"}
     review -- approve --> adopt["It becomes a permanent skill"]
     review -- no --> drop["Dropped"]
     adopt --> notice
 ```
 
-Crucial selling point: **it can extend what it *does*, but it can never expand its own
-*authority*** — it can't grant itself the right to send, spend, or touch credentials. Every
-new skill is a reviewable change with an undo.
+Ernest can extend what it *does*, but never expands its own *authority* — it cannot
+grant itself the right to send, spend, or touch credentials. Every new skill is a
+reviewable change with an undo.
 
 ---
 
-## 8. The data lifecycle (where everything lives)
+## Where data lives
 
 ```mermaid
 flowchart LR
@@ -172,70 +174,42 @@ flowchart LR
     class E c
 ```
 
-- **Live data** (emails, deals, messages) is read through the person's **own accounts** —
+- **Live data** (emails, deals, messages) is read through the user's own accounts —
   the same access they already have.
-- **What Ernest learns** (company facts, preferences, drafts, reminders) is **plain text
-  files on their machine** — readable, diff-able, backed up like any folder.
-- **Optional server** (for 24/7) is the only thing that holds connector tokens, and it's
+- **What Ernest learns** (company facts, preferences, drafts, reminders) is plain-text
+  files on the machine — readable, diff-able, and backed up like any folder.
+- **The optional server** is the only place that holds connector tokens, and it is
   isolated; the laptop never copies them.
 
 ---
 
-## 9. Answers to the "how" questions (your cheat sheet)
+## Common questions
 
-- **How does it connect to Gmail/HubSpot/Slack?** Through standard connectors you authorize
-  once (like granting any app access). On the server it's Composio; locally it's native
-  connectors. The person clicks "allow" — we never see their password.
-- **How does it not spam people?** It physically can't send. Everything is a draft until the
-  human approves. (Demo this — it's the killer point.)
-- **How does it write in my voice?** It reads the real thread and, over time, the person's
-  own sent mail, and drafts to match. Until it has samples, drafts stay neutral and must be
-  reviewed.
-- **What if it's wrong?** It flags low-confidence calls instead of guessing, and shows the
-  source for every claim. You're always the approver.
-- **Where's my data / is it private?** Local by default — nothing leaves the machine. Great
-  for NDA-sensitive teams. A server is opt-in.
-- **Does it work offline / without connecting anything?** Yes — it ships with sample data so
-  the first run is real, not empty, and the core engine needs no internet.
-- **How do we add a new use-case?** Ask it in plain English ("every Friday, flag investor
-  follow-ups"). It scaffolds a reviewable skill. No coding.
-- **n8n / Zapier / Hermes — how is this different?** Those fire blind rules. Ernest *reads,
-  reasons, cross-checks, and drafts* — and asks before acting. It's an assistant, not a
-  tripwire.
+- **How does it connect to Gmail/HubSpot/Slack?** Through standard connectors the
+  user authorizes once. On the server that's Composio; on Claude Code/Cowork it's
+  native MCP. The user grants access like any app; no password is ever seen.
+- **How does it avoid sending the wrong thing?** It can't send at all — everything is
+  a draft until a human approves it.
+- **How does it write in the user's voice?** It reads the real thread and, over time,
+  the user's own sent mail, and drafts to match. Without samples, drafts stay neutral.
+- **What if it's unsure?** It flags low-confidence calls instead of guessing, and
+  shows the source for each claim. The human is always the approver.
+- **Is the data private?** Local by default — nothing leaves the machine. A server is
+  opt-in and isolated.
+- **Does it work offline?** Yes — it ships with sample data so the first run is real,
+  and the core engine needs no internet.
+- **How is a new use-case added?** Ask in plain English ("every Friday, flag investor
+  follow-ups"). Ernest scaffolds a reviewable skill — no coding.
+- **How is this different from n8n/Zapier?** Those fire fixed rules. Ernest reads,
+  reasons, cross-checks, and drafts — and asks before acting.
 
 ---
 
-## 10. The 3-minute demo script
+## Where it stands today
 
-> Use the **Telegram bot** (@ernest_agibot) — it's live and on your phone. Have one email
-> account connected beforehand so there's real data.
-
-**0:00 — The hook (15s).** "This is Ernest. It's an AI chief of staff that watches your
-inbox, CRM, and Slack, tells you what needs you, and drafts replies — but it can never send
-anything without you. Watch."
-
-**0:15 — Watch (45s).** Type **"What needs me today?"** → it returns a ranked brief. Point
-out: "It searched everything and only shows what's genuinely open — it already dropped the
-ones that were handled elsewhere."
-
-**1:00 — The safety moment (45s).** Type **"reply to the top one and send it."** It produces
-a **draft** and says it won't send without approval. Say: "That's the whole point — it
-*can't* send on its own. That's enforced in code, not a promise."
-
-**1:45 — Draft quality (30s).** Show the draft is in their voice, references the real thread.
-"You approve, or tweak, then send from your own app."
-
-**2:15 — Range + scale (30s).** "Same Ernest runs on your laptop in Claude and Cowork, and
-here on your phone 24/7. Start local and private; add tools and a server as you grow."
-
-**2:45 — Close (15s).** "So: it finds what you dropped across every tool, drafts the fix in
-your voice, and never acts without you. That's the pitch."
-
----
-
-## 11. The four things that make it land (memorize these)
-
-1. **It can't send without you** — enforced in code. (Trust.)
-2. **It searches every tool and cross-checks** before bothering you. (Smart, not noisy.)
-3. **Your data stays on your machine.** (Privacy / NDA-safe.)
-4. **It grows new skills by being asked** — no engineers. (It compounds.)
+- Four surfaces work: Claude Code, Cowork, Codex (read-and-draft), and Hermes/Telegram
+  (mobile + 24/7).
+- A laptop surface and the server can share one **memory, reminder set, and draft
+  store** via the brain (`/ernest-connect-brain`).
+- Sharing live **account reads** through the server is the next wiring step; today
+  live tools are connected per surface.
