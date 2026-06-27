@@ -7,21 +7,58 @@ first recent page of results.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .concerns import Concern
 from .config import Config, ensure_dirs
 from .sources import load_threads
 from .watch import WatchItem, _account_followup
 
+COLD_START_DAYS = 365     # first-ever sweep covers the last 12 months
+OVERLAP_DAYS = 3          # re-cover a few recent days each run (catch late arrivals)
+
 
 def _days_param(value: str, default: int) -> int:
     match = re.search(r"(\d+)", value or "")
     return int(match.group(1)) if match else default
+
+
+def _sweep_state_path(cfg: Config) -> Path:
+    return cfg.logs_dir / "sweep-state.json"
+
+
+def read_last_sweep(cfg: Config) -> Optional[date]:
+    p = _sweep_state_path(cfg)
+    if not p.is_file():
+        return None
+    try:
+        return date.fromisoformat(json.loads(p.read_text(encoding="utf-8"))["last_sweep"])
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        return None
+
+
+def record_sweep(cfg: Config) -> None:
+    cfg.logs_dir.mkdir(parents=True, exist_ok=True)
+    _sweep_state_path(cfg).write_text(
+        json.dumps({"last_sweep": cfg.today.isoformat()}), encoding="utf-8")
+
+
+def resolve_window_days(cfg: Config, requested: str = "") -> Tuple[int, bool]:
+    """Decide the lookback window. Explicit request wins. Otherwise: first-ever
+    sweep = 12 months (cold start); subsequent = since the last sweep (+overlap).
+    Returns (window_days, is_cold_start)."""
+    if requested and requested.strip():
+        return _days_param(requested, COLD_START_DAYS), False
+    last = read_last_sweep(cfg)
+    if last is None:
+        return COLD_START_DAYS, True
+    delta = (cfg.today - last).days
+    return max(7, delta + OVERLAP_DAYS), False
 
 
 @dataclass
@@ -55,27 +92,39 @@ def build_chunks(today: date, window_days: int, chunk_days: int = 30) -> List[Au
 
 
 def _manifest(cfg: Config, window_days: int, staleness_days: int, chunk_days: int,
-              chunks: List[AuditChunk]) -> str:
+              chunks: List[AuditChunk], cold_start: bool = False) -> str:
     lines = [
-        f"# Mail audit manifest ({cfg.today.isoformat()})",
+        f"# Follow-up sweep manifest ({cfg.today.isoformat()})",
         "",
         "type: audit-manifest",
         f"window_days: {window_days}",
+        f"cold_start: {'true (first sweep — full 12 months)' if cold_start else 'false (incremental since last sweep)'}",
         f"staleness_days: {staleness_days}",
         f"chunk_days: {chunk_days}",
         f"chunks_total: {len(chunks)}",
         "",
-        "## Rules for live mail (MCP)",
+        "## Rules — search WIDE, then CROSS-CHECK for resolution",
         "",
-        "1. Process **every chunk below** before writing the final summary.",
-        "2. Do **not** stop after the first page or the most recent cluster.",
-        "3. Do **not** ask the CEO to continue mid-audit unless a connector is blocked.",
-        "4. For each chunk: search Inbox + Sent, find threads where they wrote last",
-        "   and you never replied; verify in Sent; dedupe by thread id.",
-        "5. Exclude noise: newsletters, job-seeker intros, cold vendor outreach unless",
-        "   the CEO asked to include them.",
-        "6. Rank by revenue, investor, partnership, and days waiting.",
-        "7. Watch-only — no drafts until the CEO says `draft these`.",
+        "1. Process **every chunk below** before summarizing. Do **not** stop after the first",
+        "   page/recent cluster, and do not ask the CEO to continue unless a connector is blocked.",
+        "2. **Find candidates across ALL connected tools**, not just mail: Inbox + Sent",
+        "   (they wrote last, you never replied), HubSpot (quiet/overdue deals, open tasks),",
+        "   Slack (open asks/threads you owe), Calendar (promised but unscheduled). Dedupe by",
+        "   contact/company/thread across tools.",
+        "3. **Before flagging anything as dropped, CROSS-CHECK every other tool for whether it",
+        "   was already handled elsewhere:**",
+        "   - HubSpot: is the deal advanced/closed, or is there recent logged activity?",
+        "   - Slack: was it resolved/confirmed in a thread or DM (search the company, person, topic)?",
+        "   - Calendar: did the meeting actually happen?",
+        "   - Mail: did you (or a teammate) reply in a different thread?",
+        "   If it was handled elsewhere, **DROP it from the dropped-follow-up list.**",
+        "4. **Stale CRM:** if it was resolved elsewhere but HubSpot doesn't reflect it (deal",
+        "   stage, next-step, or activity), PROPOSE a HubSpot update as a reviewable, draft-first",
+        "   action (never write to the CRM automatically).",
+        "5. Only surface **genuinely-open** items. Exclude noise (newsletters, job-seeker intros,",
+        "   cold vendor outreach) unless the CEO asked to include them.",
+        "6. Rank by revenue, investor, partnership, relationship tier, and days waiting.",
+        "7. Watch-only — no sends, no live CRM writes; drafts/CRM-proposals only on `draft these`.",
         "",
         "## Chunks (newest first)",
         "",
@@ -148,18 +197,23 @@ def _audit_card(cfg: Config, items: List[WatchItem], window_days: int,
     return "\n".join(lines)
 
 
-def run(cfg: Config, *, window: str = "365d", staleness: str = "7d",
+def run(cfg: Config, *, window: str = "", staleness: str = "7d",
         chunk_days: int = 30) -> List[Path]:
-    """Write audit manifest (+ local export card when data exists)."""
+    """Write the sweep manifest (+ local export card when data exists).
+
+    With no explicit `window`, the lookback is chosen automatically: the first-ever
+    sweep covers 12 months (cold start); later runs cover only the time since the
+    last sweep (plus a small overlap), so repeat sweeps are fast.
+    """
     ensure_dirs(cfg)
-    window_days = _days_param(window, 365)
+    window_days, cold_start = resolve_window_days(cfg, window)
     staleness_days = _days_param(staleness, 7)
     chunks = build_chunks(cfg.today, window_days, chunk_days)
     written: List[Path] = []
 
     manifest_path = cfg.watch_dir / f"audit-manifest--{cfg.today.isoformat()}.md"
     manifest_path.write_text(
-        _manifest(cfg, window_days, staleness_days, chunk_days, chunks),
+        _manifest(cfg, window_days, staleness_days, chunk_days, chunks, cold_start=cold_start),
         encoding="utf-8",
     )
     written.append(manifest_path)
@@ -173,4 +227,5 @@ def run(cfg: Config, *, window: str = "365d", staleness: str = "7d",
         )
         written.append(card_path)
 
+    record_sweep(cfg)   # remember 'today' so the next sweep is incremental
     return written

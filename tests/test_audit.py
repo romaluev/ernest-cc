@@ -63,6 +63,22 @@ def main() -> int:
     all_items, _ = run_local(cfg, window_days=365, staleness_days=1)
     check("narrow window can exclude older threads", len(items) <= len(all_items))
 
+    # Cold-start -> incremental window logic (FRESH profile: the subprocess audit
+    # above already recorded a sweep in `profile`, so use a new dir to test cold-start).
+    from ernest.audit import resolve_window_days, record_sweep, read_last_sweep, COLD_START_DAYS
+    fresh = Path(tempfile.mkdtemp(prefix="ernest_sweep_"))
+    os.environ["ERNEST_PROFILE_DIR"] = str(fresh)
+    os.environ["ERNEST_LOCAL_VAULT"] = str(fresh / "vault")
+    iso = load()
+    wd, cold = resolve_window_days(iso, "")
+    check("first sweep is cold-start (12 months)", cold and wd == COLD_START_DAYS)
+    wd2, cold2 = resolve_window_days(iso, "90d")
+    check("explicit window overrides cold-start", not cold2 and wd2 == 90)
+    record_sweep(iso)
+    check("sweep recorded", read_last_sweep(iso) == iso.today)
+    wd3, cold3 = resolve_window_days(iso, "")
+    check("after a sweep, window is incremental (not cold-start)", (not cold3) and wd3 < COLD_START_DAYS)
+
     if FAILURES:
         print("FAILED audit tests:")
         for f in FAILURES:

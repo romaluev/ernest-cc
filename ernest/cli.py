@@ -364,14 +364,17 @@ def cmd_grade(cfg: config.Config, args: argparse.Namespace) -> int:
 
 
 def cmd_audit(cfg: config.Config, args: argparse.Namespace) -> int:
-    paths = audit.run(cfg, window=args.window or "365d",
+    wd, cold = audit.resolve_window_days(cfg, args.window or "")
+    paths = audit.run(cfg, window=args.window or "",
                       staleness=args.staleness or "7d",
                       chunk_days=args.chunk_days)
-    print(f"Audit: wrote {len(paths)} file(s) for a {args.window or '365d'} owed-reply sweep.")
+    kind = "first-time 12-month" if cold else f"incremental {wd}d (since last sweep)"
+    print(f"Sweep: wrote {len(paths)} file(s) for a {kind} owed-reply sweep across all tools.")
     for path in paths:
         print(f"  - {path}")
     if any("audit-manifest" in p.name for p in paths):
-        print("Live mail: open the manifest in Claude and run /ernest-audit — finish all chunks.")
+        print("Live: open the manifest in Claude and run /ernest-audit — search every tool, "
+              "cross-check for resolution, finish all chunks.")
     return 0
 
 
@@ -447,7 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ln.set_defaults(func=cmd_learn)
 
     p_au = sub.add_parser("audit", help="deep owed-reply sweep (chunked manifest)")
-    p_au.add_argument("--window", default="365d", help="lookback window (default 365d)")
+    p_au.add_argument("--window", default="", help="lookback window; default = 12mo on first sweep, then incremental since last sweep")
     p_au.add_argument("--staleness", default="7d", help="min days waiting (default 7d)")
     p_au.add_argument("--chunk-days", type=int, default=30, dest="chunk_days",
                       help="days per MCP search bucket (default 30)")
