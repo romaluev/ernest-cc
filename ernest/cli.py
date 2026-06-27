@@ -28,8 +28,8 @@ import sys
 from pathlib import Path
 
 from . import __version__, config
-from . import (automations, audit, brief, concerns, draft, feedback, grade_run,
-               learn, onboard, preferences, read_threads, render, watch)
+from . import (automations, audit, brief, concerns, connect, draft, feedback,
+               grade_run, learn, onboard, preferences, read_threads, render, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -88,17 +88,13 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     print(f"vault: {cfg.vault_dir}")
     print(f"connectors: {', '.join(connectors)}")
     if cfg.mode == "vps":
-        import os as _os
-        import urllib.request as _u
-        url = _os.environ.get("ERNEST_BRAIN_URL", "").rstrip("/")
+        url = connect.resolve_url(cfg)
         if not url:
-            print("brain: vps mode but ERNEST_BRAIN_URL not set — using local fallback")
+            print("brain: vps mode but no brain URL set — run /ernest-connect-brain or go local")
         else:
-            try:
-                with _u.urlopen(url + "/health", timeout=4) as r:
-                    print(f"brain: reachable ({r.status}) — {url}")
-            except Exception as exc:  # noqa: BLE001
-                print(f"brain: OFFLINE — {url} ({type(exc).__name__}); running on local fallback")
+            ok, detail = connect.health_probe(url)
+            print(f"brain: reachable ({detail}) — {url}" if ok
+                  else f"brain: OFFLINE — {url} ({detail}); running on local fallback")
     onboarded = (cfg.vault_dir / ".onboarded").is_file()
     print(f"onboarded: {'yes' if onboarded else 'no — running on SAMPLE data; run /ernest-setup to personalize'}")
     print(f"active concerns: {', '.join(enabled) or '(none)'}")
@@ -123,6 +119,14 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     else:
         print("\ndiagnostics: all clear.")
     return 0
+
+
+def cmd_connect_brain(cfg: config.Config, args: argparse.Namespace) -> int:
+    return connect.connect(cfg, args.url or "", name=args.name, token_env=args.token_env)
+
+
+def cmd_go_local(cfg: config.Config, args: argparse.Namespace) -> int:
+    return connect.go_local(cfg, name=args.name)
 
 
 def cmd_update(cfg: config.Config, args: argparse.Namespace) -> int:
@@ -411,6 +415,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("start", help="the one command: watch + brief").set_defaults(func=cmd_start)
     sub.add_parser("doctor", help="health + config snapshot").set_defaults(func=cmd_doctor)
+
+    p_cb = sub.add_parser("connect-brain", help="point this surface at the VPS brain (shared memory/cards)")
+    p_cb.add_argument("--url", help="brain URL, e.g. https://brain.example.com (else env/persisted)")
+    p_cb.add_argument("--name", default=connect.DEFAULT_NAME, help="MCP server name (default ernest-brain)")
+    p_cb.add_argument("--token-env", default=connect.DEFAULT_TOKEN_ENV, dest="token_env",
+                      help="env var holding the bearer token (default ERNEST_BRAIN_TOKEN)")
+    p_cb.set_defaults(func=cmd_connect_brain)
+
+    p_gl = sub.add_parser("go-local", help="disconnect the brain; run local-only")
+    p_gl.add_argument("--name", default=connect.DEFAULT_NAME, help="MCP server name to remove")
+    p_gl.set_defaults(func=cmd_go_local)
 
     p_on = sub.add_parser("onboard", help="seed memory from answers")
     p_on.add_argument("--non-interactive", action="store_true")

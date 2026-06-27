@@ -137,6 +137,14 @@ def serve(host: str = "127.0.0.1", port: int = 8787) -> ThreadingHTTPServer:
             "that would expose the brain unauthenticated. Set ERNEST_BRAIN_TOKEN "
             "(or bind 127.0.0.1 for local dev)."
         )
+    # Server deployments (systemd unit sets ERNEST_REQUIRE_TOKEN=1) must ALWAYS
+    # have a token, even on loopback — otherwise a dropped env file would silently
+    # leave the brain open to any other local process on the box.
+    if os.environ.get("ERNEST_REQUIRE_TOKEN", "").strip() and not _Handler.token:
+        raise SystemExit(
+            "ERNEST_REQUIRE_TOKEN is set but ERNEST_BRAIN_TOKEN is empty — refusing "
+            "to start an unauthenticated brain. Check the EnvironmentFile."
+        )
     httpd = ThreadingHTTPServer((host, port), _Handler)
     return httpd
 

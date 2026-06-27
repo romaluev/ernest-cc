@@ -10,3 +10,5 @@ vault/
 .DS_Store
 ErnestVault/
 .ernest-cc/
+docs/_pdf/
+connection.json
