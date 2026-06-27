@@ -129,8 +129,29 @@ def test_brain_server_lifecycle() -> None:
         httpd.shutdown()
 
 
+def test_brain_refuses_open_nonloopback() -> None:
+    """Fail-closed: never bind a non-loopback host without a token."""
+    from brain import server
+    saved = os.environ.pop("ERNEST_BRAIN_TOKEN", None)
+    try:
+        raised = False
+        try:
+            server.serve("0.0.0.0", 0)  # public bind, no token -> must refuse
+        except SystemExit:
+            raised = True
+        check("refuses non-loopback bind without a token", raised)
+        # loopback without a token is allowed (local dev)
+        httpd = server.serve("127.0.0.1", 0)
+        check("allows loopback bind without a token", httpd is not None)
+        httpd.server_close()
+    finally:
+        if saved is not None:
+            os.environ["ERNEST_BRAIN_TOKEN"] = saved
+
+
 if __name__ == "__main__":
     test_brain_server_lifecycle()
+    test_brain_refuses_open_nonloopback()
     if FAILURES:
         print(f"FAILED {len(FAILURES)} checks:")
         for failure in FAILURES:

@@ -69,8 +69,27 @@ def test_plain_reinstall_does_not_clobber_memory() -> None:
     check("memory edit survives plain re-install", "CEO HAND EDIT" in mem.read_text(encoding="utf-8"))
 
 
+def test_first_onboarding_overwrites_sample_identity() -> None:
+    """First onboarding must REPLACE the shipped sample identity (e.g. 'Northwind'),
+    not merge-preserve it — so a real user never sees placeholder names."""
+    tmp = Path(tempfile.mkdtemp(prefix="ernest_seed_"))
+    cfg = _cfg(tmp)
+    # Simulate the shipped SAMPLE seed (what install.sh copies), no .onboarded marker.
+    (cfg.memory_dir / "company-core.md").write_text(
+        "# Company Core\n\n- Company: Northwind\n- ICP: AI video creators\n", encoding="utf-8")
+    (cfg.memory_dir / "ceo-persona.md").write_text(
+        "# CEO Persona\n\n- Name: Sam Rivera\n- Company: Northwind\n", encoding="utf-8")
+    # First onboarding with the REAL identity.
+    onboard.run(cfg, onboard.Answers(name="Real Person", company="RealCo Inc", icp="studios"))
+    core = (cfg.memory_dir / "company-core.md").read_text(encoding="utf-8")
+    persona = (cfg.memory_dir / "ceo-persona.md").read_text(encoding="utf-8")
+    check("sample company replaced by real one", "RealCo Inc" in core and "Northwind" not in core)
+    check("sample persona name replaced", "Real Person" in persona and "Sam Rivera" not in persona)
+
+
 if __name__ == "__main__":
     test_reonboard_preserves_memory()
+    test_first_onboarding_overwrites_sample_identity()
     test_plain_reinstall_does_not_clobber_memory()
     if FAILURES:
         print(f"FAILED {len(FAILURES)}:")

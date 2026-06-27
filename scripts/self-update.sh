@@ -21,7 +21,7 @@ set -euo pipefail
 
 SRC_DIR="${ERNEST_SRC_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PROFILE_DIR="${ERNEST_PROFILE_DIR:-$HOME/.ernest-cc}"
-CHANNEL="${ERNEST_UPDATE_CHANNEL:-stable}"
+CHANNEL="${ERNEST_UPDATE_CHANNEL:-main}"
 LOG="$PROFILE_DIR/logs/selfupdate.log"
 LOCK="$PROFILE_DIR/logs/selfupdate.lock"
 PENDING="$PROFILE_DIR/logs/update-pending.json"

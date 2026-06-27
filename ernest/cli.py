@@ -87,6 +87,18 @@ def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
     print(f"profile: {cfg.profile_dir}")
     print(f"vault: {cfg.vault_dir}")
     print(f"connectors: {', '.join(connectors)}")
+    if cfg.mode == "vps":
+        import os as _os
+        import urllib.request as _u
+        url = _os.environ.get("ERNEST_BRAIN_URL", "").rstrip("/")
+        if not url:
+            print("brain: vps mode but ERNEST_BRAIN_URL not set — using local fallback")
+        else:
+            try:
+                with _u.urlopen(url + "/health", timeout=4) as r:
+                    print(f"brain: reachable ({r.status}) — {url}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"brain: OFFLINE — {url} ({type(exc).__name__}); running on local fallback")
     onboarded = (cfg.vault_dir / ".onboarded").is_file()
     print(f"onboarded: {'yes' if onboarded else 'no — running on SAMPLE data; run /ernest-setup to personalize'}")
     print(f"active concerns: {', '.join(enabled) or '(none)'}")

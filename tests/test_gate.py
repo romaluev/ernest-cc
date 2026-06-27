@@ -248,6 +248,23 @@ def test_network_egress_is_gated() -> None:
             os.environ["ERNEST_ALLOW_WEB"] = prev_web
 
 
+def test_default_vault_writable_without_env() -> None:
+    """Regression: the agentic watch-card write must work even when
+    ERNEST_LOCAL_VAULT is NOT in the session env (Claude/Cowork sessions)."""
+    saved = os.environ.pop("ERNEST_LOCAL_VAULT", None)
+    try:
+        scope = gate.load_scope(str(ROOT))
+        card = os.path.expanduser("~/ErnestVault/Ernest/00-Watch/dropped-followup--x.md")
+        check("default vault card write allowed w/o ERNEST_LOCAL_VAULT",
+              gate.scope_block(scope, "Write", {"file_path": card}, str(ROOT)) is None)
+        # but a random outside path is still denied (we didn't over-open scope)
+        check("random outside write still denied",
+              gate.scope_block(scope, "Write", {"file_path": "/tmp/not-ernest/x.md"}, str(ROOT)) is not None)
+    finally:
+        if saved is not None:
+            os.environ["ERNEST_LOCAL_VAULT"] = saved
+
+
 def test_pre_tool_use_hook_fails_closed_on_bad_input() -> None:
     proc = subprocess.run(
         [sys.executable, str(ROOT / "hooks" / "pre_tool_use.py")],
@@ -300,6 +317,7 @@ if __name__ == "__main__":
     test_filesystem_scope_blocks_self_modification_and_secrets()
     test_shell_escape_to_live_external_action_is_blocked()
     test_vault_writes_are_allowed_only_inside_vault()
+    test_default_vault_writable_without_env()
     test_hubspot_hygiene_exception_requires_full_arming()
     test_pre_tool_use_hook_fails_closed_on_bad_input()
     test_pre_tool_use_hook_outputs_deny_for_live_send()

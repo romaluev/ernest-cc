@@ -60,6 +60,19 @@ else
   echo "→ [profiles.ernest] already present (left as-is)."
 fi
 
+# Safety guard: a permissive GLOBAL Codex config makes plain `codex` (without our
+# profile) unsafe for an inbox/CRM assistant — there is no Ernest gate on Codex.
+if grep -qE '^[[:space:]]*approval_policy[[:space:]]*=[[:space:]]*"never"' "$CONFIG" 2>/dev/null \
+   || grep -qE '^[[:space:]]*sandbox_mode[[:space:]]*=[[:space:]]*"danger-full-access"' "$CONFIG" 2>/dev/null; then
+  echo "" >&2
+  echo "⚠️  WARNING: your GLOBAL Codex config is permissive (approval_policy=never or" >&2
+  echo "    sandbox_mode=danger-full-access). Ernest has NO deterministic gate on Codex —" >&2
+  echo "    its safety here comes from the 'ernest' profile. ALWAYS launch with:" >&2
+  echo "        codex --profile ernest" >&2
+  echo "    Running plain 'codex' in this folder would load Ernest with your permissive" >&2
+  echo "    global settings and no guardrail. Do not do that for inbox/CRM work." >&2
+fi
+
 cat <<EOF
 
 Ernest is ready on Codex.

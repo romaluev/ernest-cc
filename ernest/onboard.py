@@ -142,10 +142,15 @@ def _persona_lines(a: Answers) -> List[str]:
 def run(cfg: Config, answers: Optional[Answers]) -> Answers:
     cfg.memory_dir.mkdir(parents=True, exist_ok=True)
     a = answers if answers is not None else gather_interactive()
-    # Never destroy existing memory: back up first, then merge-fill blanks only.
     _backup_memory(cfg)
-    _write_merged(cfg.memory_dir / "company-core.md", _company_core_lines(a))
-    _write_merged(cfg.memory_dir / "ceo-persona.md", _persona_lines(a))
+    # FIRST onboarding (no marker): the shipped memory is generic SAMPLE identity
+    # (e.g. "Northwind"). Replace it with the CEO's answers so a real user/teammate
+    # never sees placeholder names. RE-onboarding: merge (preserve the CEO's real
+    # values + any custom bullets they added). Either way, backed up above.
+    first_time = not (cfg.vault_dir / ".onboarded").is_file()
+    write = (lambda p, lines: p.write_text("\n".join(lines) + "\n", encoding="utf-8")) if first_time else _write_merged
+    write(cfg.memory_dir / "company-core.md", _company_core_lines(a))
+    write(cfg.memory_dir / "ceo-persona.md", _persona_lines(a))
     cfg.vault_dir.mkdir(parents=True, exist_ok=True)
     (cfg.vault_dir / ".onboarded").write_text(
         f"onboarded: {cfg.today.isoformat()}\ncompany: {a.company}\n", encoding="utf-8"

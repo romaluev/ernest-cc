@@ -19,6 +19,10 @@ scope:
     - "memory/**"
     - "logs/**"
     - "${ERNEST_LOCAL_VAULT}/**"
+    # Default vault paths too, so the agentic watch-card write path works even
+    # when ERNEST_LOCAL_VAULT isn't exported into the Claude/Cowork session env.
+    - "${HOME}/ErnestVault/**"
+    - "~/ErnestVault/**"
   # deny = absolute (read AND write). Secrets and credential material only.
   deny:
     - "**/.env"

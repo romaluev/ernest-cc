@@ -123,9 +123,20 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(rid, -32601, f"method not found: {method}")
 
 
+_LOOPBACK = {"127.0.0.1", "::1", "localhost", ""}
+
+
 def serve(host: str = "127.0.0.1", port: int = 8787) -> ThreadingHTTPServer:
     _Handler.brain = Brain()
     _Handler.token = os.environ.get("ERNEST_BRAIN_TOKEN", "").strip()
+    # Fail closed: never expose an unauthenticated brain to the network. A token
+    # is REQUIRED to bind a non-loopback host (loopback/dev may run open).
+    if host not in _LOOPBACK and not _Handler.token:
+        raise SystemExit(
+            "Refusing to bind a non-loopback host without ERNEST_BRAIN_TOKEN — "
+            "that would expose the brain unauthenticated. Set ERNEST_BRAIN_TOKEN "
+            "(or bind 127.0.0.1 for local dev)."
+        )
     httpd = ThreadingHTTPServer((host, port), _Handler)
     return httpd
 
