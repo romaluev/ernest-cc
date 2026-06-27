@@ -21,6 +21,7 @@ sends anything on its own. Local-first: your memory stays on your machine.
 | [privacy.md](privacy.md) | What stays on your machine (and what doesn't) |
 | [updates.md](updates.md) | How updates work — one-tap, validated, auto-rollback |
 | [connectors.md](connectors.md) | Connect Gmail / Slack / CRM (native MCP, not Composio) |
+| [codex.md](codex.md) | Use Ernest on OpenAI Codex CLI (adapter + safety notes) |
 | [add-automation.md](add-automation.md) | Add a new thing for Ernest to watch |
 | [security.md](security.md) | The safety gate and approval levels |
 | [troubleshooting.md](troubleshooting.md) | When something looks off |
