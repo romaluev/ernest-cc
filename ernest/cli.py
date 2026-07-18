@@ -29,7 +29,8 @@ from pathlib import Path
 
 from . import __version__, config
 from . import (automations, audit, brief, concerns, connect, draft, feedback,
-               grade_run, learn, onboard, preferences, read_threads, render, watch)
+               grade_run, health, learn, onboard, preferences, read_threads,
+               render, selftest as selftest_mod, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -75,50 +76,96 @@ def _diagnostics(cfg: config.Config) -> list[tuple[str, str]]:
     return issues
 
 
-def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
-    missing = [name for name in ("company-core.md", "ceo-persona.md", "standing-concerns.md")
-               if not (cfg.memory_dir / name).is_file()]
-    connectors = _connectors(cfg) or ["(none - local exports only)"]
-    cst = concerns.status(cfg)
-    enabled = [c.id for c in concerns.load(cfg) if c.enabled]
-    degraded = bool(missing) or cst.level == "error"
-    print("Ernest health check: ok" if not degraded else "Ernest health check: degraded")
+def cmd_doctor(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Doctor v2: four-state audit (WORKING / UNVERIFIED / BROKEN / OFF) with a
+    remedy per finding. `--json` is the machine surface the self-repair skill
+    and `ernest heal` consume."""
+    checks = health.run_checks(cfg)
+    if getattr(args, "json", False):
+        print(health.to_json(checks))
+        return 1 if any(c.state == health.BROKEN for c in checks) else 0
+
+    counts = health.summary(checks)
+    broken = [c for c in checks if c.state == health.BROKEN]
+    print("Ernest health check: " + ("ok" if not broken else "degraded"))
     print(f"mode: {cfg.mode}")
     print(f"profile: {cfg.profile_dir}")
     print(f"vault: {cfg.vault_dir}")
+    connectors = _connectors(cfg) or ["(none - local exports only)"]
     print(f"connectors: {', '.join(connectors)}")
-    if cfg.mode == "vps":
-        url = connect.resolve_url(cfg)
-        if not url:
-            print("brain: vps mode but no brain URL set — run /ernest-connect-brain or go local")
-        else:
-            ok, detail = connect.health_probe(url)
-            print(f"brain: reachable ({detail}) — {url}" if ok
-                  else f"brain: OFFLINE — {url} ({detail}); running on local fallback")
+    enabled = [c.id for c in concerns.load(cfg) if c.enabled]
+    print(f"active concerns: {', '.join(enabled) or '(none)'}")
     onboarded = (cfg.vault_dir / ".onboarded").is_file()
     print(f"onboarded: {'yes' if onboarded else 'no — running on SAMPLE data; run /ernest-setup to personalize'}")
-    print(f"active concerns: {', '.join(enabled) or '(none)'}")
-    if cst.level != "ok":
-        marker = "ERROR" if cst.level == "error" else "note"
-        print(f"watch concerns [{marker}]: {cst.message}")
-    if missing:
-        print(f"missing memory files: {', '.join(missing)}")
-        print("fix: restore them or run `./install.sh --refresh`.")
-        return 1
-    if cst.level == "error":
-        print("fix: your watch reminders are OFF. Tell Ernest to repair standing-concerns, "
-              "or run `/ernest-onboard` / setup again.")
-        return 1
+
+    print(f"\naudit: {counts[health.WORKING]} working · {counts[health.UNVERIFIED]} unverified · "
+          f"{counts[health.BROKEN]} broken · {counts[health.OFF]} off")
+    order = {health.BROKEN: 0, health.UNVERIFIED: 1, health.OFF: 2, health.WORKING: 3}
+    for c in sorted(checks, key=lambda c: (order[c.state], c.subsystem)):
+        if c.state == health.WORKING:
+            continue
+        tag = f"[{c.state}]"
+        fixable = " (auto-fixable: `ernest heal`)" if c.auto_fixable and c.state == health.BROKEN else ""
+        print(f"  {tag:<13} {c.id}: {c.evidence}{fixable}")
+        if c.remedy and c.remedy != "—":
+            print(f"                fix: {c.remedy}")
+
+    # Keep the legacy soft-diagnostics block: it is the guided-repair surface.
     issues = _diagnostics(cfg)
-    if issues:
-        print(f"\ndiagnostics: {len(issues)} thing(s) to improve (not fatal):")
-        for problem, fix in issues:
-            print(f"  - {problem}\n    fix: {fix}")
-        print("\nself-repair: run `/ernest-doctor` in Claude to auto-diagnose, "
-              "research missing tools, and propose fixes (approval-gated).")
-    else:
-        print("\ndiagnostics: all clear.")
+    non_working = counts[health.UNVERIFIED] + counts[health.BROKEN] + counts[health.OFF]
+    print(f"\ndiagnostics: {max(len(issues), non_working)} thing(s) surfaced "
+          f"({counts[health.BROKEN]} broken)." if (issues or non_working)
+          else "\ndiagnostics: all clear.")
+    print("self-repair: `ernest heal` fixes the safe class; run `/ernest-doctor` in Claude "
+          "to auto-diagnose the rest, research missing tools, and propose fixes (approval-gated).")
+    if broken:
+        health.write_health_card(cfg, checks)
+        return 1
     return 0
+
+
+def cmd_heal(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Safe-class auto-repair: snapshot -> fix -> re-check -> keep/report.
+    Everything non-auto-fixable escalates to a health card + /ernest-doctor."""
+    checks = health.run_checks(cfg)
+    broken = [c for c in checks if c.state == health.BROKEN]
+    if not broken:
+        print("Heal: nothing broken. (Audit: all checks WORKING/UNVERIFIED/OFF.)")
+        return 0
+    repairs = health.heal(cfg, checks)
+    fixed = [r for r in repairs if r.get("verified")]
+    for r in repairs:
+        state = "fixed+verified" if r.get("verified") else str(r.get("action"))
+        print(f"  - {r['check']}: {state}")
+    after = health.run_checks(cfg)
+    still = [c for c in after if c.state == health.BROKEN]
+    if still:
+        card = health.write_health_card(cfg, after)
+        print(f"Heal: {len(fixed)} fixed, {len(still)} still broken — escalated to a health card:")
+        for c in still:
+            print(f"  [BROKEN] {c.id}: {c.remedy}")
+        if card:
+            print(f"  - card: {card}")
+        print("Next: run `/ernest-doctor` in Claude for guided repair (approval-gated).")
+        return 1
+    print(f"Heal: {len(fixed)} repair(s) applied and verified. Log: {health.repairs_log(cfg)}")
+    if fixed and not getattr(args, "no_selftest", False):
+        ok, report = selftest_mod.run(cfg)
+        print("Post-heal selftest: " + ("PASS" if ok else "FAIL"))
+        if not ok:
+            for line in report:
+                print(line)
+            return 1
+    return 0
+
+
+def cmd_selftest(cfg: config.Config, _args: argparse.Namespace) -> int:
+    """Sandboxed smoke canary: watch -> brief -> grade in a throwaway profile."""
+    ok, report = selftest_mod.run(cfg)
+    for line in report:
+        print(line)
+    print("Selftest: " + ("PASS — the daily loop works end-to-end." if ok else "FAIL — see above."))
+    return 0 if ok else 1
 
 
 def cmd_connect_brain(cfg: config.Config, args: argparse.Namespace) -> int:
@@ -144,7 +191,19 @@ def cmd_update(cfg: config.Config, args: argparse.Namespace) -> int:
     if not script.is_file():
         print(f"self-update.sh not found at {script}")
         return 1
-    return subprocess.run(["bash", str(script), action]).returncode
+    rc = subprocess.run(["bash", str(script), action]).returncode
+    if rc == 0 and action in ("apply", "auto"):
+        # Promotion gate: an update that can't run its own daily loop is reported
+        # immediately (the updater already validated the gate; this adds the
+        # end-to-end canary on top).
+        ok, report = selftest_mod.run(cfg)
+        print("Post-update selftest: " + ("PASS" if ok else "FAIL"))
+        if not ok:
+            for line in report:
+                print(line)
+            print("Roll back with: scripts/self-update.sh status  (see previous-version notes)")
+            return 1
+    return rc
 
 
 def cmd_concern_toggle(cfg: config.Config, args: argparse.Namespace) -> int:
@@ -414,7 +473,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("start", help="the one command: watch + brief").set_defaults(func=cmd_start)
-    sub.add_parser("doctor", help="health + config snapshot").set_defaults(func=cmd_doctor)
+    p_doc = sub.add_parser("doctor", help="four-state health audit + config snapshot")
+    p_doc.add_argument("--json", action="store_true", help="machine-readable audit (for /ernest-doctor)")
+    p_doc.set_defaults(func=cmd_doctor)
+
+    p_heal = sub.add_parser("heal", help="auto-fix the safe class of broken checks (verified, logged)")
+    p_heal.add_argument("--no-selftest", action="store_true", dest="no_selftest",
+                        help="skip the post-heal sandbox selftest")
+    p_heal.set_defaults(func=cmd_heal)
+
+    sub.add_parser("selftest", help="sandboxed smoke canary: watch/brief/grade + gate").set_defaults(
+        func=cmd_selftest)
 
     p_cb = sub.add_parser("connect-brain", help="point this surface at the VPS brain (shared memory/cards)")
     p_cb.add_argument("--url", help="brain URL, e.g. https://brain.example.com (else env/persisted)")
@@ -517,7 +586,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     cfg = config.load()
-    return args.func(cfg, args)
+    try:
+        return args.func(cfg, args)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:  # noqa: BLE001 — the engine never breaks silently
+        import traceback
+        traceback.print_exc()
+        health.record_failure(cfg, getattr(args, "command", "?"), exc)
+        print(f"\nernest {getattr(args, 'command', '?')} crashed — captured to "
+              f"{health.repairs_log(cfg)} and a health card. Run `ernest doctor`.",
+              file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
