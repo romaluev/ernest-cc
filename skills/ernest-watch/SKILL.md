@@ -1,7 +1,7 @@
 ---
 name: ernest-watch
 description: Use for ambient watch runs and standing concerns. Detect and remind only; never draft email, CRM, Slack, calendar, or sheet content in watch mode.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Ernest Watch
@@ -52,25 +52,44 @@ If using exported files, label every item `source: local-export`. If no real dat
 `mail-deep-audit` / `/ernest-audit` — not the daily watch loop. Complete every
 date chunk in the manifest before summarizing.
 
-## Reminder Card Schema
+## Canonical Reminder Card (the ONE format — all skills reference this)
 
-```yaml
-reminder_card:
-  id: "<concern-id>"
-  playbook: "<skill-name>"
-  detected_at: "<iso8601>"
-  summary: "<one line>"
-  items:
-    - source: "<gmail-thread | hubspot-record | slack-thread>"
-      title: "<human-readable item>"
-      owner: "<owner or unknown>"
-      days_stalled: "<number or unknown>"
-      next_action: "<recommended next action>"
-  suggested_next: "<what the draft half would do>"
-  draft_trigger: "draft these"
-  draft_params: {}
+This is what the engine actually writes (`ernest/watch.py`); model-written cards
+must match it so `ernest render` and the brief read them identically. Transcribed
+from a real run:
+
+```markdown
+# Watch: dropped-followups (2026-06-25)
+
+type: reminder-card
+source: local-export
+items: 2
+
+Remind/assign only. Say "draft these" if you want draft-only outreach prepared.
+
+## 1. [TIER-1] Lucas Silva - Apex Bank
+- tier: tier-1
+- waiting: 31d
+- why: Inbound 31d ago with no reply (threshold 7d).
+- action: Reply to this contact to keep the thread alive.
+- context: <one-line summary>
+- thread_id: <id>
 ```
 
-End chat/card summaries with:
+Field contract per item: `## N. <title>` (a `[TIER-N]`/`[OVERDUE]` badge in the
+title when tiered), then bullets in this order — optional `- tier:`, optional
+`- waiting: Nd`, required `- why:` and `- action:`, optional `- context:` and
+`- thread_id:`. Header: `type: reminder-card`, `source:` (`local-export` |
+`vps-brain` | `engine-health`), `items: N`.
+
+Skill-specific EXTRA bullets are allowed after the standard ones (keep them
+kebab-short): `- checked: mail,slack,hubspot,calendar` (cross-check trail),
+`- crm: PROPOSE <update>` (stale-CRM proposal, never auto-applied),
+`- assignee: <owner>` (assignment cards), `- list: <name>` (list-sync).
+
+Model-written cards (and every chat summary of a card) end with:
 
 `Reply draft these when you want me to prepare actions.`
+
+Grade cards add score + confidence inline: `- tier: tier-1 (confidence: high,
+match score: 100)` plus `- check:` flag lines — see the grading skills.

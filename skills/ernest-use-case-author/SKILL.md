@@ -1,7 +1,7 @@
 ---
 name: ernest-use-case-author
 description: Use when the CEO wants a new automation, a recurring manual pattern appears, or an existing skill needs improvement. Produces reviewable skill/config proposals only.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Ernest Use-Case Author
@@ -49,28 +49,50 @@ improvement_proposal:
   status: proposed
 ```
 
-## New Skill Template
+## New Skill Template (the house shape — deep by construction)
+
+Every section below exists for a reason; fill them all, delete none. `ernest
+new-automation` scaffolds this same shape (`ernest/automations.py`), and the
+contract test checks required sections.
 
 ```markdown
 ---
 name: <skill-name>
-description: <when to use>
+description: <when to use — the always-loaded trigger surface, <=2 lines>
 version: 0.1.0
 ---
 
 # <Title>
 
+## When to use
+<trigger phrases + when NOT to use this skill>
+
 ## Parameters
+<each param: default + WHERE IT LIVES (concern in memory/standing-concerns.md)>
 
-## Watch Half
+## Data sources (read-only; swappable)
+<per row: VPS brain tool -> local MCP -> data/ path; engine baseline command>
 
-## Draft Half
+## Watch half
+<numbered steps: search wide -> cross-check for resolution -> suppress handled
+-> write ONE canonical card (see ernest-watch)>
 
-## Safety
+## Decision criteria
+<the actual thresholds, ranking keys, tie-breaks — never "use judgment" alone;
+plus a tuning table: | Symptom | Diagnosis | Knob | Where it lives |>
+
+## Draft half (explicit ask only)
+<grounding (read-thread), voice source (ceo-persona), output 00-Drafts
+STATUS: DRAFT, approval level L2/L3 named>
 
 ## Output
+<canonical card ref + skill-specific extra bullets + the standard reply line>
 
-## When Not To Use
+## Failure modes
+<what silently breaks and how it's detected (doctor check ids where relevant)>
+
+## Verification
+<exact command(s) + expected observable output, transcribed from a real run>
 ```
 
 ## Done-When

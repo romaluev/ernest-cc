@@ -49,3 +49,6 @@ Or JSON with a `messages` array: `{ "at", "from", "direction", "body" }`.
 Export the sheet to CSV (File -> Download -> CSV) and drop it in `data/lists/`,
 or connect a Sheets MCP so Ernest reads it live. The `list-sync` concern then
 reconciles it against the matching email category.
+- `data/support/tickets.csv` — sample support queue (Pylon/Zendesk shape) for support-triage demos.
+- `data/calls/fireflies-2026-06-24-apex.md` — sample call transcript for call-prep/call-coaching demos.
+- `data/ashby/candidates.csv` — sample ATS pipeline for hiring-pipeline demos.

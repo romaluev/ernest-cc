@@ -1,7 +1,7 @@
 ---
 name: talent-sourcing-grading
 description: Source and grade talent for your company's outreach (current focus pool set in config, e.g. ex-NovaLabs alumni) into Tier-1, Tier-2, Tier-3. Use when sourcing or qualifying candidates, reviewing LinkedIn/GitHub profiles, building a recruiting pipeline, or deciding who to reach out to. Cast a WIDE net first, then rank. Assign owners; never message a candidate without approval.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Talent Sourcing & Grading
@@ -35,9 +35,50 @@ Don't search once with one phrase. Breadth before precision:
 ernest grade --talent
 ```
 Cards land in `00-Watch/talent-grades--<date>.md`, sorted **Tier first, then
-match score** (strongest match leads each tier — not arbitrary/date order). The
-score counts signal density (multiple Big-Tech/AI-media/seniority hits rank
-higher). Use it to decide outreach order; surface the top of each tier.
+match score** (strongest match leads each tier — not arbitrary/date order). Use
+it to decide outreach order; surface the top of each tier.
+
+### Decision criteria — the actual scoring model
+
+Source of truth: `ernest/grading.py` (**code wins**; the contract test keeps this
+table honest). Decision order, then score:
+
+1. **Exclusions short-circuit**: current employee or investor of the company
+   (`exclusions` lists) → **tier-3, high, 0** — regardless of pedigree.
+2. **Tier-1 signals** (any one qualifies; score adds per DISTINCT hit):
+
+   | Signal (list in talent-rubric.json) | Weight | Structural? |
+   |---|---|---|
+   | senior title (`senior_titles`) AND Big-Tech co (`big_tech`) | +16 once | yes |
+   | `strong_tech_keywords` (ML, CV, phd, kaggle, …) | +12 each | yes |
+   | `ai_media_models` (sora, comfyui, diffusion, …) | +12 each | yes |
+   | commercial signal AND Tier-1 country | +14 once | no |
+
+   Confidence: **high** with any structural hit, else **medium**. Every Tier-1
+   gets the flag "confirm likely interested (judgment call)".
+3. **Tier-2 signals** (a single one surfaces the person as an option, low
+   confidence): big_tech alone +8 each · US-startup signal +5 · product/GTM +5 ·
+   Tier-1 country alone +2 — and country alone is **never** a qualifying reason.
+4. **Nothing found → tier-3, low, 0** with the flag "read the full profile —
+   local text may be thin". Never silently drop.
+
+**Worked example** (engine-true): "Maya Chen, Senior Engineer at DeepMind,
+profile: diffusion models, comfyui workflows, united states" → senior@big-tech
+(+16) + ai_media `comfyui`, `diffusion` (+12×2) = **40, tier-1, high**, flagged
+for the interest judgment call. Abbreviations expand before matching
+(Sr.→senior, ML→machine learning, SWE→software engineer, …) so "Sr. ML Eng"
+scores like the spelled-out title.
+
+**Config footgun:** the JSON **replaces** code defaults wholesale — deleting a
+key (e.g. `exclusions`) silently disables that family. Edit lists, never delete
+keys; `ernest doctor` flags missing keys.
+
+| Symptom | Diagnosis | Knob | Where it lives |
+|---|---|---|---|
+| Too few candidates surfaced | search too narrow, not a talent shortage | widen queries (§1) + broaden `big_tech`/`ai_media_models` | `data/grading/talent-rubric.json` |
+| Wrong people at the top | thin `profile`/`title` columns | enrich the CSV row (grading reads them) | `data/sourcing/targets.csv` |
+| Current teammate keeps appearing | exclusions list stale | add name/company to `exclusions` | rubric JSON |
+| Pool changed (new focus) | snapshot rot | set `pool` + swap lists, re-run grade | rubric JSON + `memory/icp-talent.md` |
 
 ## 3. Hard filter + judgment
 
@@ -69,9 +110,19 @@ or "add X as a Tier-1 signal", edit that JSON (`pool` + lists), summarize the
 diff, and re-run `ernest grade --talent`. Broaden the lists freely — wider lists =
 more candidates surfaced. Never hardcode the pool or company in logic.
 
+## Verification (engine optional — sample data)
+
+`ERNEST_TODAY=2026-06-25 ernest grade --talent` on the shipped samples: the card
+sorts tier-1 first with per-candidate `match score`, and the sourcing rows with
+`purpose=hire` are auto-tiered the same way in `partnership-sourcing` cards.
+Spot-check one reason line against the weights table above — if they disagree,
+code or rubric changed; re-read both.
+
 ## Hard rules
 
 - A Tier-1 **country** alone is not a qualifier — it only strengthens "strong
   B2B/B2C experience in a Tier-1 country."
 - Read the profile before discarding; thin local text → flag, don't trash.
 - Never contact a candidate without the owner's approval.
+- Tier corrections are learning signals: `ernest feedback "<name> was actually
+  tier-1"`; recurring corrections feed `ernest learn` proposals.
