@@ -31,6 +31,32 @@ from .config import Config
 B2B_RANK = {"tier-1": 0, "tier-2": 1, "trash": 2, "unknown": 3}
 TALENT_RANK = {"tier-1": 0, "tier-2": 1, "tier-3": 2, "unknown": 3}
 
+# Scoring weights — the documented contract. The grading skills quote these
+# tables and `tests/test_skill_contract.py` keeps the docs honest; if you tune
+# ranking, tune it HERE (per-hit weights multiply by the number of distinct
+# list hits — "signal density").
+CRM_BASE = {"tier-1": 100.0, "other": 60.0}
+DEFAULT_TIER2_SCORE = 2.0  # unknown-but-not-trash B2B default (needs a check)
+B2B_WEIGHTS = {
+    "category": 8.0,             # per ICP-category hit
+    "provider": 12.0,            # per model/cloud-provider hit
+    "company": 12.0,             # per major-company hit
+    "person": 15.0,              # per high-reputation-person hit
+    "intent": 6.0,               # per enterprise-intent keyword hit
+    "reputation_or_prior": 14.0, # single bump: CEO reference OR CRM prior contact
+    "large_fund": 15.0,          # fund AUM above rubric threshold
+}
+TALENT_WEIGHTS = {
+    "senior_at_big_tech": 16.0,          # senior title AND big-tech company
+    "strong_tech": 12.0,                 # per strong-technical-keyword hit
+    "ai_media": 12.0,                    # per AI-media model/product hit
+    "commercial_in_tier1_country": 14.0, # commercial signal AND Tier-1 country
+    "t2_big_tech": 8.0,                  # tier-2: per big-tech hit alone
+    "t2_us_startup": 5.0,                # tier-2: US-startup signal
+    "t2_gtm": 5.0,                       # tier-2: product/GTM signal
+    "t2_country": 2.0,                   # tier-2: country alone (never qualifying)
+}
+
 # Common abbreviations / variants, expanded in the haystack so matching isn't
 # brittle ("Sr." == senior, "ML" == machine learning, "SWE" == software engineer).
 _ABBREV = {
@@ -134,7 +160,7 @@ def grade_b2b(
     crm_map = {k.lower(): v for k, v in r.get("crm_tier_map", {}).items()}
     if crm_tier and crm_tier.lower() in crm_map:
         tier = crm_map[crm_tier.lower()]
-        base = 100.0 if tier == "tier-1" else 60.0
+        base = CRM_BASE["tier-1"] if tier == "tier-1" else CRM_BASE["other"]
         return Grade(tier, "high", [f"CRM tier '{crm_tier}' -> {tier}"], [], base)
 
     # 2. Tier-1 list/intent signals — count ALL hits for density/score.
@@ -145,21 +171,21 @@ def grade_b2b(
     intents = _all_in(hay, t1.get("intent_keywords", []))
     reps = _all_in(hay, t1.get("reputation_keywords", []))
     if cats:
-        reasons.append(f"ICP category: {', '.join(cats[:3])}"); score += 8 * len(cats)
+        reasons.append(f"ICP category: {', '.join(cats[:3])}"); score += B2B_WEIGHTS["category"] * len(cats)
     if provs:
-        reasons.append(f"Model/cloud provider: {', '.join(provs[:3])}"); score += 12 * len(provs)
+        reasons.append(f"Model/cloud provider: {', '.join(provs[:3])}"); score += B2B_WEIGHTS["provider"] * len(provs)
     if comps:
-        reasons.append(f"Major company: {', '.join(comps[:3])}"); score += 12 * len(comps)
+        reasons.append(f"Major company: {', '.join(comps[:3])}"); score += B2B_WEIGHTS["company"] * len(comps)
     if people:
-        reasons.append(f"High-reputation person: {', '.join(people[:3])}"); score += 15 * len(people)
+        reasons.append(f"High-reputation person: {', '.join(people[:3])}"); score += B2B_WEIGHTS["person"] * len(people)
     if intents:
-        reasons.append(f"Enterprise buying intent: {', '.join(intents[:3])}"); score += 6 * len(intents)
+        reasons.append(f"Enterprise buying intent: {', '.join(intents[:3])}"); score += B2B_WEIGHTS["intent"] * len(intents)
     if reps or prior_contact:
         reasons.append("Prior contact (CRM)" if prior_contact else f"References the CEO: {', '.join(reps[:2])}")
-        score += 14
+        score += B2B_WEIGHTS["reputation_or_prior"]
     threshold = float(t1.get("fund_aum_threshold_busd", 2.0))
     if fund_aum_busd is not None and fund_aum_busd > threshold:
-        reasons.append(f"Large fund: ~${fund_aum_busd}B AUM (> ${threshold}B)"); score += 15
+        reasons.append(f"Large fund: ~${fund_aum_busd}B AUM (> ${threshold}B)"); score += B2B_WEIGHTS["large_fund"]
 
     if reasons:
         strong = bool(cats or provs or comps or people or reps or prior_contact
@@ -178,7 +204,8 @@ def grade_b2b(
     # 4. Default: Tier-2, low confidence — needs a human/LLM check.
     flags.append("No Tier-1 list/intent hit and not obvious trash. Verify "
                  "market-leader / enterprise status before upgrading.")
-    return Grade("tier-2", "low", ["No decisive signal; defaulting to Tier-2"], flags, 2.0)
+    return Grade("tier-2", "low", ["No decisive signal; defaulting to Tier-2"], flags,
+                 DEFAULT_TIER2_SCORE)
 
 
 # --------------------------------------------------------------------------- #
@@ -221,13 +248,17 @@ def grade_talent(
 
     structural = False
     if big_tech and senior:
-        reasons.append(f"Senior role ('{senior}') at {', '.join(big_tech[:2])}"); score += 16; structural = True
+        reasons.append(f"Senior role ('{senior}') at {', '.join(big_tech[:2])}")
+        score += TALENT_WEIGHTS["senior_at_big_tech"]; structural = True
     if strong_tech:
-        reasons.append(f"Strong technical base: {', '.join(strong_tech[:3])}"); score += 12 * len(strong_tech); structural = True
+        reasons.append(f"Strong technical base: {', '.join(strong_tech[:3])}")
+        score += TALENT_WEIGHTS["strong_tech"] * len(strong_tech); structural = True
     if ai_media:
-        reasons.append(f"AI media products/models: {', '.join(ai_media[:3])}"); score += 12 * len(ai_media); structural = True
+        reasons.append(f"AI media products/models: {', '.join(ai_media[:3])}")
+        score += TALENT_WEIGHTS["ai_media"] * len(ai_media); structural = True
     if commercial and country:
-        reasons.append(f"Commercial strength ('{commercial}') in Tier-1 country ('{country.strip()}')"); score += 14
+        reasons.append(f"Commercial strength ('{commercial}') in Tier-1 country ('{country.strip()}')")
+        score += TALENT_WEIGHTS["commercial_in_tier1_country"]
 
     if reasons:
         confidence = "high" if structural else "medium"
@@ -237,17 +268,18 @@ def grade_talent(
     # Tier-2 signals — a single relevant signal is enough to surface as an option.
     t2_reasons: List[str] = []
     if big_tech:
-        t2_reasons.append(f"Big Tech experience: {', '.join(big_tech[:2])}"); score += 8 * len(big_tech)
+        t2_reasons.append(f"Big Tech experience: {', '.join(big_tech[:2])}")
+        score += TALENT_WEIGHTS["t2_big_tech"] * len(big_tech)
     us_startup = _any_in(hay, t2.get("us_startup_signals", []))
     if us_startup:
-        t2_reasons.append(f"US startup signal: '{us_startup}'"); score += 5
+        t2_reasons.append(f"US startup signal: '{us_startup}'"); score += TALENT_WEIGHTS["t2_us_startup"]
     gtm = _any_in(hay, t2.get("product_gtm_keywords", []))
     if gtm:
-        t2_reasons.append(f"Product/GTM experience: '{gtm}'"); score += 5
+        t2_reasons.append(f"Product/GTM experience: '{gtm}'"); score += TALENT_WEIGHTS["t2_gtm"]
     if ai_media:
         t2_reasons.append(f"Worked with AI media models: {', '.join(ai_media[:2])}")
     if country:
-        score += 2
+        score += TALENT_WEIGHTS["t2_country"]
 
     if t2_reasons:
         # A single relevant signal -> tier-2 (an option to consider), not tier-3.
