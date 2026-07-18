@@ -2,13 +2,15 @@
 """Ernest command-line engine.
 
     ernest start                       the one command: watch + brief
-    ernest doctor                      health + config snapshot
+    ernest doctor [--json]             four-state health audit (WORKING/UNVERIFIED/BROKEN/OFF)
+    ernest heal                        auto-fix the safe class of broken checks (verified, logged)
+    ernest selftest                    sandboxed smoke canary: watch/brief/grade + gate
     ernest onboard [--non-interactive] seed memory from answers
     ernest watch                       write remind-only cards
     ernest brief                       write + print the morning brief
     ernest draft --concern <id>        draft-only outreach for review
     ernest new-automation --id ...     register a concern + scaffold a skill
-    ernest learn [--note "..."]        summarize self-improvement proposals
+    ernest learn [--apply K|--rollback ID]  evidence-ranked improvement report; reversible applies
     ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
     ernest read [--owed] [--thread ID] cache full thread bodies to vault
     ernest grade [--b2b] [--talent]    tier inbound leads + talent (ICP rubrics)
