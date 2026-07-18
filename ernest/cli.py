@@ -29,8 +29,8 @@ from pathlib import Path
 
 from . import __version__, config
 from . import (automations, audit, brief, concerns, connect, draft, feedback,
-               grade_run, health, learn, onboard, preferences, read_threads,
-               render, selftest as selftest_mod, watch)
+               grade_run, health, improve, learn, onboard, preferences,
+               read_threads, render, selftest as selftest_mod, telemetry, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -287,8 +287,10 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     except ValueError:
         pass
     cards = watch.run(cfg)
+    _log_watch_telemetry(cfg, cards)
     grade_run.run(cfg)
     path, summary = brief.run(cfg)
+    telemetry.log(cfg, "start", cards=len(cards))
     prefs = preferences.load(cfg)
     auto_render = preferences.truthy(prefs.get("auto_render", "on")) and not os.environ.get("ERNEST_NO_RENDER")
     digest = render.run(cfg) if auto_render else None
@@ -308,8 +310,18 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     return 0
 
 
+def _log_watch_telemetry(cfg: config.Config, paths: list) -> None:
+    per_concern = {p.name.split("--", 1)[0]: telemetry.card_items(p) for p in paths}
+    # Concerns that ran but produced no card still count as a quiet run.
+    for c in concerns.load(cfg):
+        if c.enabled:
+            per_concern.setdefault(c.id, 0)
+    telemetry.log(cfg, "watch", cards=len(paths), concerns=per_concern)
+
+
 def cmd_watch(cfg: config.Config, _args: argparse.Namespace) -> int:
     paths = watch.run(cfg)
+    _log_watch_telemetry(cfg, paths)
     if not paths:
         print("Watch: nothing slipped. No cards needed.")
         return 0
@@ -328,6 +340,9 @@ def cmd_brief(cfg: config.Config, _args: argparse.Namespace) -> int:
 
 def cmd_draft(cfg: config.Config, args: argparse.Namespace) -> int:
     path = draft.run(cfg, concern_id=args.concern, contact=args.contact)
+    # "CEO asked to draft" is the strongest acted-on signal a card can get.
+    telemetry.log(cfg, "draft", concern=args.concern, contact=args.contact,
+                  produced=bool(path))
     if path is None:
         print("Draft: nothing to draft for that selection.")
         return 0
@@ -399,7 +414,12 @@ def cmd_feedback(cfg: config.Config, args: argparse.Namespace) -> int:
         print("Tell me what to change, e.g. `ernest feedback \"answers too long\"`.")
         return 2
     feedback.record(cfg, note)
-    print("Noted. I logged your feedback and will fold it into how I work.")
+    signal = learn.classify(note)
+    if signal:
+        print(f"Noted — that reads like a {signal.replace('_', ' ')} signal; it feeds the "
+              "weekly improvement pass (`ernest learn`).")
+    else:
+        print("Noted. I logged your feedback and will fold it into how I work.")
     print(f"  - log: {feedback.log_path(cfg)}")
     print("  - lasting preferences live in memory/preferences.md (ask me to update them).")
     return 0
@@ -444,6 +464,31 @@ def cmd_audit(cfg: config.Config, args: argparse.Namespace) -> int:
 def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
     if args.note:
         learn.add_note(cfg, args.note)
+    if getattr(args, "apply", None):
+        try:
+            result = improve.apply(cfg, args.apply)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        entry = result["entry"]
+        if result["applied"]:
+            print(f"Applied '{args.apply}' -> {entry['target']} (id {entry['id']}, "
+                  f"selftest {entry.get('selftest', 'skipped')}).")
+            print(f"Roll back anytime: `ernest learn --rollback {entry['id']}`")
+            return 0
+        print(f"NOT kept: '{args.apply}' — the sandbox selftest failed after applying, "
+              "so the change was reverted automatically.")
+        for line in result.get("selftest_report", []):
+            print(line)
+        return 1
+    if getattr(args, "rollback", None):
+        try:
+            result = improve.rollback(cfg, args.rollback)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        print(f"Rolled back {result['rolled_back']} (via {result['via']}).")
+        return 0
     if args.adopt is not None:
         if not args.id or not args.playbook:
             print("Error: --adopt requires --id and --playbook.", file=sys.stderr)
@@ -461,8 +506,16 @@ def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
         print("Run `ernest watch` to put it to work immediately.")
         return 0
     path = learn.summarize(cfg)
+    improve.append_report(cfg, path)
+    proposals = improve.generate(cfg)
+    ready = [p for p in proposals if p["ready"] and p.get("diff")]
     print("Learn: proposals are candidates only and need CEO approval (L2).")
-    print(f"Adopt one with `ernest learn --adopt <n> --id <id> --playbook <p>`.")
+    if ready:
+        print(f"{len(ready)} typed proposal(s) READY (evidence-backed, reversible):")
+        for p in ready[:5]:
+            print(f"  - {p['title']}")
+            print(f"    apply: ernest learn --apply {p['key']}")
+    print("Adopt a new automation with `ernest learn --adopt <n> --id <id> --playbook <p>`.")
     print(f"  - {path}")
     return 0
 
@@ -522,10 +575,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_na.add_argument("--window")
     p_na.set_defaults(func=cmd_new_automation)
 
-    p_ln = sub.add_parser("learn", help="summarize / adopt self-improvement proposals")
-    p_ln.add_argument("--note", help="record an observed repetition by hand")
+    p_ln = sub.add_parser("learn", help="evidence-ranked improvement report; apply/rollback typed changes")
+    p_ln.add_argument("--note", help="record an observed repetition/correction by hand")
     p_ln.add_argument("--adopt", type=int, metavar="N",
                       help="promote proposal #N into a live automation (approval step)")
+    p_ln.add_argument("--apply", metavar="KEY",
+                      help="apply a typed proposal by key (snapshot + selftest + logged; reversible)")
+    p_ln.add_argument("--rollback", metavar="ID",
+                      help="roll back an applied change by its id (see Applied changes)")
     p_ln.add_argument("--id", help="concern id when adopting")
     p_ln.add_argument("--playbook", help="playbook when adopting")
     p_ln.add_argument("--staleness")

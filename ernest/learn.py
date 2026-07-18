@@ -24,6 +24,34 @@ SIGNAL_RE = re.compile(
     r"repeat|recurring|should automate|automate this|new automation|always have to)"
 )
 
+# Correction-pattern classes (the claude-reflect model — capture the correction
+# at the moment of instruction; see docs/research/self-improving-systems.md).
+# Order matters: first match wins.
+CORRECTION_CLASSES: list[tuple[str, re.Pattern[str]]] = [
+    ("rubric_correction", re.compile(
+        r"(?i)(was|is|it'?s)\s+actually\s+(tier[- ]?[123]|trash)|wrong tier|"
+        r"should (?:be|have been)\s+(?:graded\s+)?(tier[- ]?[123]|trash)|not (?:a )?tier[- ]?1")),
+    ("threshold_complaint", re.compile(
+        r"(?i)too (?:noisy|many|often|aggressive)|false positives?|stop flagging|"
+        r"already (?:handled|replied|answered|done)|not (?:actually )?stale|keeps? re-?flagging")),
+    ("missed_item", re.compile(
+        r"(?i)\bmissed\b|didn'?t (?:catch|flag|surface)|should have (?:flagged|caught|surfaced)|"
+        r"why (?:didn'?t|no) (?:you|ernest|it)")),
+    ("preference", re.compile(
+        r"(?i)too (?:long|short|verbose|detailed)|prefer (?:pdf|html)|"
+        r"(?:hide|don'?t show|skip) (?:the )?(?:trash|tier-?3|details)|"
+        r"(?:no,? use|actually,? use)\s+\S+|max \d+ (?:points|bullets|items)")),
+    ("new_use_case", SIGNAL_RE),
+]
+
+
+def classify(text: str) -> Optional[str]:
+    """Which correction class does this text belong to (None = no signal)."""
+    for name, pattern in CORRECTION_CLASSES:
+        if pattern.search(text):
+            return name
+    return None
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -45,11 +73,13 @@ def _extract_pattern(text: str) -> str:
     return compact[start:end]
 
 
-def make_entry(pattern: str, session_id: str = "manual") -> Dict[str, object]:
+def make_entry(pattern: str, session_id: str = "manual",
+               signal_type: str = "new_use_case") -> Dict[str, object]:
     return {
         "captured_at": _now(),
         "session_id": session_id,
         "observed_pattern": _extract_pattern(pattern),
+        "signal_type": signal_type,
         "change_type": "proposal",
         "target": "ernest-use-case-author",
         "approval_level": "L2",
@@ -60,7 +90,8 @@ def make_entry(pattern: str, session_id: str = "manual") -> Dict[str, object]:
 
 
 def capture(payload: Dict[str, object], log_path: Path) -> Optional[Dict[str, object]]:
-    """Record a proposal candidate if the transcript shows a repetition signal."""
+    """Record a typed proposal candidate when the transcript shows a repetition
+    signal OR a correction pattern (claude-reflect classes)."""
     text = ""
     for key in ("transcript", "conversation", "summary", "prompt"):
         value = payload.get(key)
@@ -69,9 +100,11 @@ def capture(payload: Dict[str, object], log_path: Path) -> Optional[Dict[str, ob
             break
     if not text:
         text = json.dumps(payload, ensure_ascii=False)
-    if not SIGNAL_RE.search(text):
+    signal = classify(text)
+    if signal is None:
         return None
-    entry = make_entry(text, str(payload.get("session_id") or payload.get("sessionId") or "unknown"))
+    entry = make_entry(text, str(payload.get("session_id") or payload.get("sessionId") or "unknown"),
+                       signal_type=signal)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -80,7 +113,7 @@ def capture(payload: Dict[str, object], log_path: Path) -> Optional[Dict[str, ob
 
 def add_note(cfg: Config, note: str) -> Dict[str, object]:
     cfg.logs_dir.mkdir(parents=True, exist_ok=True)
-    entry = make_entry(note)
+    entry = make_entry(note, signal_type=classify(note) or "new_use_case")
     with _proposals_path(cfg).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return entry
