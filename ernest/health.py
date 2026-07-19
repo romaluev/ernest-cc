@@ -311,11 +311,44 @@ def _check_onboarded(cfg: Config) -> List[Check]:
                   "Run `/ernest-setup` (or `ernest onboard`) to make it yours.")]
 
 
+def _check_update_channel(cfg: Config) -> List[Check]:
+    """Ground truth for 'is the update source reachable' — so nobody has to
+    guess it from a (gate-blocked) in-chat web fetch. Uses the same sanctioned
+    path the daily updater uses: git against the source checkout's origin."""
+    import os
+    import subprocess
+    src = os.environ.get("ERNEST_SRC_DIR", "").strip()
+    if not src or not (Path(src) / ".git").exists():
+        return [Check("update.channel", "engine", OFF,
+                      "no source checkout configured (plugin-only surface)",
+                      "Standalone auto-update needs a git clone + ./install.sh; "
+                      "plugin installs update via the plugin browser.")]
+    channel = os.environ.get("ERNEST_UPDATE_CHANNEL", "main").strip() or "main"
+    try:
+        r = subprocess.run(
+            ["git", "-C", src, "ls-remote", "--exit-code", "--heads", "origin", channel],
+            capture_output=True, text=True, timeout=10)
+    except Exception as exc:  # noqa: BLE001 — includes TimeoutExpired
+        return [Check("update.channel", "engine", UNVERIFIED,
+                      f"origin not reachable right now ({type(exc).__name__})",
+                      "Likely offline/transient. The 07:30 updater retries daily; "
+                      "run `ernest update` when back online.")]
+    if r.returncode == 0:
+        return [Check("update.channel", "engine", WORKING,
+                      f"origin has branch '{channel}' (update source reachable)", "—")]
+    # Origin answered but the channel branch is gone — the updater falls back
+    # to main on its own; surface it so the profile can be fixed.
+    return [Check("update.channel", "engine", UNVERIFIED,
+                  f"channel '{channel}' missing on origin (updater falls back to main)",
+                  "Set ERNEST_UPDATE_CHANNEL=main in the profile env, or restore the branch.")]
+
+
 def run_checks(cfg: Config) -> List[Check]:
     """The full audit. Deterministic, read-only except last-good snapshots."""
     checks: List[Check] = []
     for fn in (_check_engine_imports, _check_memory, _check_concerns, _check_grading,
-               _check_vault, _check_connectors, _check_data, _check_gate, _check_onboarded):
+               _check_vault, _check_connectors, _check_data, _check_gate, _check_onboarded,
+               _check_update_channel):
         try:
             checks.extend(fn(cfg))
         except Exception as exc:  # noqa: BLE001 — a crashing check IS a finding

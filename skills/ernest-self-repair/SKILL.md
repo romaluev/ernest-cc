@@ -1,7 +1,7 @@
 ---
 name: ernest-self-repair
 description: Diagnose and fix Ernest itself when something is broken or missing — a tool/MCP connector isn't available, a command errors, a skill is missing, doctor reports issues, or a step silently fails. Use when the user says "fix it", "why isn't this working", "set this up", "a tool is missing", or when you hit a capability gap mid-task. Research best practices on the web, propose concrete fixes, apply safe ones, and escalate risky ones for approval.
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Ernest Self-Repair
@@ -42,6 +42,29 @@ dirs — and every fix is verified by re-running the failed check, logged to
 `logs/repairs.jsonl`, with the broken file preserved in `logs/repairs/`. Then it
 runs the sandbox selftest. If heal clears everything, verify (step 5) and stop.
 
+## 2b. Updating Ernest — never via web fetches (they're blocked by design)
+
+If the ask is "update Ernest" / "install the latest version" / "check what's new":
+
+- **Do NOT try to fetch github.com** (WebFetch or curl). In local mode the gate
+  denies web egress, so the fetch comes back empty — that is the gate working,
+  **not evidence the repo is private, moved, or unreachable**. Never tell the
+  CEO the repo "may be private" based on an in-session fetch.
+- The sanctioned path is the engine's own updater, which the gate allows:
+
+```bash
+ernest update            # fetch -> validate -> install -> verify, auto-rollback
+ernest update status     # current commit, channel, pending/rollback state
+ernest --version         # what's installed right now
+```
+
+- Ernest also updates itself daily at 07:30 (`ernest schedule`), so "you're
+  already current" is checked with `ernest update` — it prints `already current`
+  when there's nothing new. `ernest doctor` shows update-channel reachability.
+- If `ernest` isn't on PATH here (plugin-only surface with no standalone
+  install), say exactly that: updates for the plugin come from re-fetching the
+  plugin in the plugin browser; the standalone install is what auto-updates.
+
 ## 3. Research what heal can't fix (use the web — this is expected)
 
 For each remaining BROKEN/needed item, look it up before guessing:
@@ -61,6 +84,7 @@ For each remaining BROKEN/needed item, look it up before guessing:
 | `grading.*` UNVERIFIED "lacks key(s)" | The JSON **replaces** code defaults wholesale — a missing key silently disables that signal family. Copy the missing key back from `ernest/grading.py` `_DEFAULTS`, keep the CEO's list edits, re-run `ernest grade` | L1 (say what you restored) |
 | `memory.core` BROKEN (company-core / ceo-persona missing) | Never invent identity. Restore from git/repo if available, else run `/ernest-onboard` | L1 |
 | `connectors.brain` BROKEN | Probe the URL; if the VPS is down propose `/ernest-go-local` as the interim; fixing the VPS is its own task | L1 (mode switch) |
+| "Update Ernest" / GitHub "looks private/empty" from chat | §2b: the gate blocks web fetches by design — run `ernest update` (allowed), never diagnose privacy from a blocked fetch | L1 |
 | Missing MCP connector | Propose the exact `claude mcp add ...` / `.mcp.json` edit; apply only on approval | **L2** |
 | `gate.selftest` BROKEN | Stop everything else. Reinstall (`./install.sh --refresh`); do NOT proceed with any send-adjacent work until it passes — the draft-first guarantee is the product | **escalate now** |
 | Needs login / token / credential | Stop and ask the CEO to authorize | **L3 — manual** |

@@ -23,6 +23,7 @@ flowchart TD
     B -->|"Brief is empty"| D["You're on sample data — connect or import"]
     B -->|"A draft or send was blocked"| E["Expected — Ernest is draft-first"]
     B -->|"A tool or connector is missing"| F["Run ernest doctor / /ernest-doctor"]
+    B -->|"'The repo looks private/empty' when updating in chat"| H["Expected — web fetches are gate-blocked.<br/>Run ernest update (terminal or chat)"]
     B -->|"Answers too long or wrong format"| G["Tell Ernest, or edit preferences"]
     B -->|"Anything else"| F
     classDef box fill:#eef,stroke:#557
@@ -162,6 +163,14 @@ Replying **apply update** in Claude does the same thing as `ernest update`. Eith
 - If a promotion fails mid-way, Ernest restores the previous version and pauses auto-updates until you've had a look.
 
 See [updates.md](updates.md) for the full flow. (Maintainers working from a git checkout can still update by hand with `git pull --ff-only && ./install.sh --refresh`, but `ernest update` is the safe path for everyone else.)
+
+**"I asked Claude to update/install Ernest and it said the repo looks private or
+returned empty."** Expected, and not a repo problem: in local mode Ernest's
+safety gate blocks in-chat web fetches (github.com included), so Claude's
+attempt to browse the repo comes back empty. The repo is public. Updates never
+need in-chat web access — ask Ernest to run `ernest update` (the gate allows the
+updater), run it yourself in a terminal, or just wait for the 07:30 auto-update.
+`ernest --version` and `ernest update status` show the ground truth.
 
 ---
 

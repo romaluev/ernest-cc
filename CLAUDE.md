@@ -43,6 +43,7 @@ fake a workflow.
 - Do not install or trust unvetted third-party skills/connectors without surfacing the risk.
 - Do not self-grant new credentials, external-send permissions, memory scopes, or legal/money authority.
 - Self-repair & self-extend: when a tool/connector is missing or a step fails, do not just stop. Diagnose (`ernest doctor`), research the fix on the web (official MCP servers, best practices), apply safe in-workspace fixes directly, and propose anything touching credentials/sends/installs for approval. Use `ernest-self-repair` (`/ernest-doctor`). Verify, then offer to make recurring fixes permanent.
+- Updating Ernest never needs in-chat web access. The gate blocks web fetches in local mode by design — an empty GitHub fetch is the gate working, **not** evidence the repo is private. Run `ernest update` (gate-allowed; validated, auto-rollback), or rely on the daily 07:30 auto-update; `ernest --version` / `ernest update status` are the ground truth.
 - ICP and grading criteria are living config, not hardcoded. The talent pool (currently ex-NovaLabs) and all signal lists live in `data/grading/*.json` and `memory/icp-*.md`; change them on request and re-run `ernest grade`.
 
 ## Approval Levels

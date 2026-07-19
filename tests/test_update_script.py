@@ -106,6 +106,50 @@ def main() -> int:
         head_after = git("rev-parse", "HEAD", cwd=src).stdout.strip()
         check("status leaves HEAD untouched", head_before == head_after)
 
+        # -- 5. doctor's update.channel check (engine ground truth) --------
+        # Runs in-process against the same local origin — no network.
+        sys.path.insert(0, str(ROOT))
+        from ernest import config as _config, health as _health  # noqa: E402
+
+        def channel_check(env_overrides):
+            saved = {k: os.environ.get(k) for k in env_overrides}
+            os.environ.update({k: v for k, v in env_overrides.items() if v is not None})
+            for k, v in env_overrides.items():
+                if v is None:
+                    os.environ.pop(k, None)
+            try:
+                cfg = _config.load()
+                return next(c for c in _health.run_checks(cfg)
+                            if c.id == "update.channel")
+            finally:
+                for k, v in saved.items():
+                    (os.environ.pop(k, None) if v is None
+                     else os.environ.__setitem__(k, v))
+
+        c = channel_check({"ERNEST_SRC_DIR": None})
+        check("update.channel: OFF without a source checkout", c.state == "OFF")
+        c = channel_check({"ERNEST_SRC_DIR": str(src),
+                           "ERNEST_UPDATE_CHANNEL": "main"})
+        check("update.channel: WORKING against local origin", c.state == "WORKING")
+        c = channel_check({"ERNEST_SRC_DIR": str(src),
+                           "ERNEST_UPDATE_CHANNEL": "retired"})
+        check("update.channel: UNVERIFIED on missing channel (fallback noted)",
+              c.state == "UNVERIFIED" and "falls back to main" in c.evidence)
+
+        # -- 6. gate must allow the sanctioned update path -----------------
+        from ernest import gate as _gate  # noqa: E402
+        for label, tool, targs in [
+            ("gate allows `ernest update auto`", "Bash", {"command": "ernest update auto"}),
+            ("gate allows `git pull --ff-only`", "Bash", {"command": "git pull --ff-only"}),
+            ("gate allows self-update.sh", "Bash",
+             {"command": "bash scripts/self-update.sh check"}),
+        ]:
+            check(label, _gate.evaluate(tool, targs, str(ROOT)) is None)
+        check("gate still denies WebFetch github (egress guard intact)",
+              _gate.evaluate("WebFetch",
+                             {"url": "https://github.com/x/y"}, str(ROOT))
+              is not None)
+
     print()
     if FAILURES:
         print(f"{len(FAILURES)} failure(s)")
