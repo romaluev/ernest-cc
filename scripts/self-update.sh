@@ -68,9 +68,32 @@ ensure_git() {
   git -C "$SRC_DIR" rev-parse --git-dir >/dev/null 2>&1 || { log "SRC_DIR is not a git repo: $SRC_DIR"; return 1; }
 }
 
+# If the configured channel branch does not exist on origin (e.g. a legacy
+# profile pinned to a retired channel), fall back to main so an install can
+# never be stranded on a dead channel. Runs in the parent shell: it may
+# reassign CHANNEL, which every later step (is_ff, merge) then uses.
+resolve_channel() {
+  [ "$CHANNEL" = "main" ] && return 0
+  if git -C "$SRC_DIR" ls-remote --exit-code --heads origin "$CHANNEL" >/dev/null 2>&1; then
+    return 0
+  fi
+  if git -C "$SRC_DIR" ls-remote --exit-code --heads origin main >/dev/null 2>&1; then
+    log "channel '$CHANNEL' missing on origin — falling back to main"
+    CHANNEL="main"
+    return 0
+  fi
+  return 1   # origin unreachable; let fetch_target's retries report it
+}
+
 fetch_target() {  # echoes target SHA, returns non-zero on fetch failure
-  git -C "$SRC_DIR" fetch --quiet origin "$CHANNEL" 2>/dev/null || return 1
-  git -C "$SRC_DIR" rev-parse "origin/$CHANNEL" 2>/dev/null || return 1
+  local attempt
+  for attempt in 1 2 3; do   # absorb transient network blips
+    if git -C "$SRC_DIR" fetch --quiet origin "$CHANNEL" 2>/dev/null; then
+      git -C "$SRC_DIR" rev-parse "origin/$CHANNEL" 2>/dev/null && return 0
+    fi
+    [ "$attempt" -lt 3 ] && sleep 2
+  done
+  return 1
 }
 
 is_ff() {  # HEAD must be an ancestor of origin/CHANNEL
@@ -79,6 +102,7 @@ is_ff() {  # HEAD must be an ancestor of origin/CHANNEL
 
 cmd_check() {
   ensure_git || return 1
+  resolve_channel || true
   local OLD NEW WT
   OLD="$(git -C "$SRC_DIR" rev-parse HEAD)"
   NEW="$(fetch_target)" || { log "fetch failed"; return 1; }
@@ -108,6 +132,7 @@ cmd_check() {
 
 cmd_apply() {
   ensure_git || return 1
+  resolve_channel || true
   if [ -f "$ROLLBACK_FLAG" ]; then
     log "skip apply: previous update rolled back; clear $ROLLBACK_FLAG to retry"
     card "Skipping update: the last attempt was rolled back. Needs a look before retrying."
@@ -163,6 +188,7 @@ cmd_auto() { cmd_check && cmd_apply; }
 
 cmd_status() {
   ensure_git || return 1
+  resolve_channel || true
   printf 'channel:   %s\n' "$CHANNEL"
   printf 'HEAD:      %s\n' "$(short HEAD)"
   printf 'pending:   %s\n' "$([ -f "$PENDING" ] && cat "$PENDING" || echo none)"

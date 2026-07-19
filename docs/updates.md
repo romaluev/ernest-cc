@@ -61,10 +61,13 @@ You can always run one yourself: `ernest update` (apply now) or
 
 ## For the person who maintains Ernest (you)
 
-Updates are published by pushing to the repo's `main` branch — nothing else to do.
-Every install pulls from `main` (override with `ERNEST_UPDATE_CHANNEL` in the
-profile `env` to track a different branch, e.g. a soak/canary branch that takes
-changes first). The updater is `scripts/self-update.sh`: fast-forward-only, a
+Updates are published by pushing to the repo's `main` branch, then mirroring it
+to `stable` for older installs (`git push origin main:stable`) — that's the whole
+release step. New installs track `main`; pre-1.2 installs were configured for
+`stable` (override either with `ERNEST_UPDATE_CHANNEL` in the profile `env`, e.g.
+a soak/canary branch that takes changes first). If a configured channel branch
+disappears from origin, the updater falls back to `main` on its own rather than
+stranding the install. The updater is `scripts/self-update.sh`: fast-forward-only, a
 commit that fails the health gauntlet or gate self-test is never applied, and a
 failed promotion auto-rolls-back and sets a loop-stop flag
 (`update-rolledback.flag`) so a bad version is never retried unattended.

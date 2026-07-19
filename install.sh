@@ -163,6 +163,9 @@ write_launcher() {
 export ERNEST_PROFILE_DIR="$PROFILE_DIR"
 [ -f "$PROFILE_DIR/env" ] && set -a && . "$PROFILE_DIR/env" && set +a
 export PYTHONPATH="$PROFILE_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
+# Run from the profile so \`python3 -m\` can never import an \`ernest\` package
+# from whatever directory the caller happens to be in.
+cd "$PROFILE_DIR"
 exec python3 -m ernest.cli "\$@"
 EOF
   chmod +x "$PROFILE_DIR/bin/ernest"
