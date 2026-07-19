@@ -38,6 +38,15 @@ time (`memory/preferences.md`).
 | Task tracking | Open/overdue by owner |
 | Inbound prospects | Partnership/sales leads waiting |
 
+## Self-healing & self-improving
+
+Ernest maintains itself. `ernest doctor` runs a four-state health audit (WORKING /
+UNVERIFIED / BROKEN / OFF) with a remedy per check; `ernest heal` auto-fixes the
+safe class and verifies each fix (rolling back anything that doesn't clear).
+`ernest learn` turns the corrections you give it into evidence-ranked, reversible
+improvement proposals you approve — every self-change is versioned and one command
+to undo. Design basis: [docs/research/self-improving-systems.md](docs/research/self-improving-systems.md).
+
 ## Connectors
 
 Optional. Native MCP servers or file exports under `data/` — not Composio.
