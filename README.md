@@ -10,13 +10,19 @@ drafts only when you ask, never sends on its own.
 install **`ernest-cc`** from the Ernest marketplace, then run **`/ernest-setup`** and
 answer ~5 plain questions. New here? Read [how-it-works.md](docs/how-it-works.md) (2 min).
 
-**Terminal (power users / setting up for someone else):**
+**Terminal — fully standalone, no plugin needed (power users / setting up for someone else):**
 
 ```bash
+git clone https://github.com/romaluev/ernest-cc.git && cd ernest-cc
 ./install.sh      # once — checks prereqs, installs, prints your first brief
-ernest start      # daily: what needs you (nothing sent)
-ernest schedule   # run the morning brief automatically
+ernest schedule   # morning brief at 8:00 + validated auto-update at 7:30, daily
+ernest start      # any time: what needs you (nothing sent)
 ```
+
+After `ernest schedule`, Ernest keeps itself up to date: every morning it fetches
+the latest version, validates it (health checks + safety self-test), installs it,
+re-verifies — and rolls back automatically if anything fails
+([docs/updates.md](docs/updates.md)). Your memory and customizations are never touched.
 
 No config editing. By default everything stays on your machine ([docs/privacy.md](docs/privacy.md)).
 

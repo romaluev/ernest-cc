@@ -5,14 +5,23 @@ your customizations.
 
 ## What you'll see
 
-When a new version is ready, Ernest checks it, makes sure it's safe, and then shows
-you a one-line card:
+Nothing, usually — that's the point. Every morning at 7:30 Ernest fetches the
+latest version, validates it, installs it, and re-verifies itself. When something
+actually happened, a one-line card tells you after the fact:
+
+> Update applied: now on `abc1234`. Your memory and custom skills are untouched.
+
+If an update fails validation it is never installed; if it fails after install it
+is rolled back automatically — and either way you get a card saying so.
+
+Prefer to approve updates yourself? Switch the scheduled job to staged mode
+(`ernest update check`): Ernest then only stages a card —
 
 > Update ready — reply **apply update** to install. Auto-rollback if anything fails.
 
-You reply **apply update** (or run `ernest update`). That's it.
+— and you promote it with `ernest update`.
 
-## What happens behind that one tap
+## What happens on every update
 
 ```mermaid
 flowchart TB
@@ -45,12 +54,17 @@ The important parts in plain words:
 
 ## Turning it on
 
-During setup, say yes to the morning check, or run `ernest schedule`. Ernest then
-checks for updates each morning and shows the one-tap card when there's something new.
-You can always run a check yourself: `ernest update check`.
+Run `ernest schedule` once. That installs the morning brief (8:00) and the daily
+validated auto-update (7:30). Remove anytime with `ernest schedule --remove`.
+You can always run one yourself: `ernest update` (apply now) or
+`ernest update check` (stage only) / `ernest update status`.
 
 ## For the person who maintains Ernest (you)
 
-Updates are published to a git channel. A test/soak surface tracks the newest commit;
-the CEO's machine tracks a "stable" commit that's only promoted after the new one runs
-clean. Pin by commit, never a moving branch. Full design: `ERNEST-UNIFIED-ARCHITECTURE.md` §9.
+Updates are published by pushing to the repo's `main` branch — nothing else to do.
+Every install pulls from `main` (override with `ERNEST_UPDATE_CHANNEL` in the
+profile `env` to track a different branch, e.g. a soak/canary branch that takes
+changes first). The updater is `scripts/self-update.sh`: fast-forward-only, a
+commit that fails the health gauntlet or gate self-test is never applied, and a
+failed promotion auto-rolls-back and sets a loop-stop flag
+(`update-rolledback.flag`) so a bad version is never retried unattended.

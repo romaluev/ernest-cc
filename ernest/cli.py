@@ -236,7 +236,11 @@ def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
     la.mkdir(parents=True, exist_ok=True)
     jobs = [
         ("com.notiky.ernest.brief", f'"{bin_path}" start', 8, 0),
-        ("com.notiky.ernest.update", f'"{bin_path}" update check', 7, 30),
+        # Full auto-update: fetch -> validate in a throwaway worktree -> ff-merge
+        # -> refresh -> post-verify, with automatic rollback and a loop-stop flag
+        # on failure (scripts/self-update.sh). Staged one-tap mode is available
+        # by editing this job to `update check`.
+        ("com.notiky.ernest.update", f'"{bin_path}" update auto', 7, 30),
     ]
     remove = getattr(args, "remove", False)
     for label, cmdline, hour, minute in jobs:
@@ -265,7 +269,8 @@ def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
     if remove:
         print("Removed Ernest's morning schedule.")
     else:
-        print("Done — Ernest will check your morning brief at 8:00 and look for updates at 7:30, every day.")
+        print("Done — morning brief at 8:00, and a validated auto-update at 7:30, every day.")
+        print("Updates are checked, applied, and verified automatically — and rolled back on any failure.")
         print("Nothing is sent; it only prepares what needs you. Remove anytime with `ernest schedule --remove`.")
     return 0
 
