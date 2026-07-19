@@ -1,7 +1,7 @@
 """Usage telemetry: the raw signal the improvement loop learns from.
 
-Every engine command appends one JSONL line to `logs/usage.jsonl` (the Hermes
-`.usage.json` analog — see docs/research/self-improving-systems.md). Local-only,
+Every engine command appends one JSONL line to `logs/usage.jsonl` (usage-counter
+telemetry — see docs/research/self-improving-systems.md). Local-only,
 append-only, no content: counts and ids, never bodies. `concern_stats` derives
 per-concern activity (last fired, total items, active days) so `ernest learn`
 can spot dead concerns (stale-30d pattern) and measure applied changes.

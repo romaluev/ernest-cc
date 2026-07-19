@@ -1,7 +1,7 @@
 """Four-state health audit + safe-class self-repair (the self-healing loop).
 
-Doctor v2. Every check reports one of four states (taxonomy borrowed from the
-last30days skill's `doctor`, see docs/research/self-improving-systems.md):
+Doctor v2. Every check reports one of four states (four-state health taxonomy;
+see docs/research/self-improving-systems.md):
 
     WORKING     verified good right now
     UNVERIFIED  configured/plausible but not proven (e.g. MCP present, unprobed)

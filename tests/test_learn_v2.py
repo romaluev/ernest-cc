@@ -50,7 +50,7 @@ def main() -> int:  # noqa: PLR0915 — one linear scenario, deliberately
     check("classify: tier correction", learn.classify("Apex was actually tier-1") == "rubric_correction")
     check("classify: noise complaint", learn.classify("dropped-followups is too noisy, false positives")
           == "threshold_complaint")
-    check("classify: missed item", learn.classify("you missed the Nubank thread") == "missed_item")
+    check("classify: missed item", learn.classify("you missed the Apex Bank thread") == "missed_item")
     check("classify: preference", learn.classify("answers are too long, prefer pdf") == "preference")
     check("classify: repetition", learn.classify("I keep manually checking Korea list") == "new_use_case")
     check("classify: none", learn.classify("great, thanks") is None)

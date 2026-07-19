@@ -24,8 +24,8 @@ SIGNAL_RE = re.compile(
     r"repeat|recurring|should automate|automate this|new automation|always have to)"
 )
 
-# Correction-pattern classes (the claude-reflect model — capture the correction
-# at the moment of instruction; see docs/research/self-improving-systems.md).
+# Correction-pattern classes (reflection model — capture the correction at the
+# moment of instruction; see docs/research/self-improving-systems.md).
 # Order matters: first match wins.
 CORRECTION_CLASSES: list[tuple[str, re.Pattern[str]]] = [
     ("rubric_correction", re.compile(

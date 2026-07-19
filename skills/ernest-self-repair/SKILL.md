@@ -8,8 +8,8 @@ version: 2.0.0
 
 Ernest should not make the CEO debug it. When a capability is missing or broken,
 **diagnose → heal → research → fix → verify**, within the approval rules. Don't
-just report a wall; find the way through it. The escalation ladder (from the
-production self-healing pattern, `docs/research/self-improving-systems.md`):
+just report a wall; find the way through it. The escalation ladder (tiered
+self-healing, `docs/research/self-improving-systems.md`):
 deterministic auto-fix → this guided session → CEO decision.
 
 ## 1. Diagnose (machine-readable)

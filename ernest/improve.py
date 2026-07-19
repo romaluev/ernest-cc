@@ -14,7 +14,7 @@ ever applied without an explicit `ernest learn --apply <key>` (L2 — the CEO's
 action). Every apply: snapshot -> change -> sandbox selftest -> keep or revert,
 logged to logs/applied.jsonl; `--rollback <id>` restores any prior apply. If
 post-apply signals get WORSE, the next report auto-proposes the rollback
-(the backtrack pattern — see docs/research/self-improving-systems.md).
+(quality backtracking — see docs/research/self-improving-systems.md).
 """
 from __future__ import annotations
 
