@@ -2,7 +2,7 @@
 
 source: local-export
 channel: email
-thread_id: brightpay
+thread_id: apex-bank
 contact: Lucas Silva
 company: Apex Bank
 last_inbound: 2026-06-20

@@ -11,6 +11,7 @@ sends anything on its own. Local-first: your memory stays on your machine.
 | **See what's possible** (vision, diagrams, ideas to try) | [vision.md](vision.md) |
 | **Get started** (in Claude, no terminal) | [quickstart.md](quickstart.md) |
 | **Understand how it works** (2 min, with diagrams) | [how-it-works.md](how-it-works.md) |
+| **Go deeper** (the full plain-English guidebook) | [guidebook.md](guidebook.md) |
 | **Use it day to day** | [daily-use.md](daily-use.md) |
 | **See example prompts** (simple → complex) | [examples.md](examples.md) |
 
@@ -36,6 +37,8 @@ Same Ernest, different body. Each guide has a quick start and a few example requ
 | [security.md](security.md) | The safety gate and approval levels |
 | [troubleshooting.md](troubleshooting.md) | When something looks off |
 | [architecture.md](architecture.md) | How the pieces fit (for maintainers) |
+| [research/self-improving-systems.md](research/self-improving-systems.md) | Design basis for the self-healing & self-improving loops (for maintainers) |
+| [plus-vps.md](plus-vps.md) | Run a local surface + the VPS brain sharing one state |
 | [vps-brain.md](vps-brain.md) | Optional 24/7 server — skip unless you need overnight |
 
 ## The 30-second version

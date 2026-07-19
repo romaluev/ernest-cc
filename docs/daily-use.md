@@ -74,7 +74,9 @@ Don't edit the YAML by hand — tell Ernest, or use `/ernest-new-automation`.
 | Draft (optional) | `draft these` / `/ernest-draft` | `ernest draft --concern <id>` |
 | New automation | `/ernest-new-automation` | `ernest new-automation --id ... --playbook ...` |
 | Learning | `/ernest-learn` | `ernest learn` |
-| Health check | `/ernest-doctor` | `ernest doctor` |
+| Health check | `/ernest-doctor` | `ernest doctor` (`--json`) |
+| Auto-repair | `/ernest-doctor` | `ernest heal` |
+| Smoke test | — | `ernest selftest` |
 
 Use Claude when you want live mail/CRM/Slack search. Use `ernest start` when exports
 or sample data are enough — it needs no model, no connectors, no sign-in.
@@ -85,7 +87,9 @@ Common terminal commands, copy-paste-ready:
 ernest start                       # the daily one: watch + brief + digest
 ernest render --open --pdf         # open today's digest and also save a PDF
 ernest feedback "answers too long" # teach Ernest your taste
-ernest doctor                      # health + config snapshot
+ernest doctor                      # four-state health audit (add --json for the repair skill)
+ernest heal                        # auto-fix the safe class, verify each fix, roll back if it fails
+ernest selftest                    # sandboxed smoke check (watch + brief + grade + gate)
 ```
 
 ## First-time setup

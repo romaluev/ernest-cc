@@ -2,13 +2,15 @@
 """Ernest command-line engine.
 
     ernest start                       the one command: watch + brief
-    ernest doctor                      health + config snapshot
+    ernest doctor [--json]             four-state health audit (WORKING/UNVERIFIED/BROKEN/OFF)
+    ernest heal                        auto-fix the safe class of broken checks (verified, logged)
+    ernest selftest                    sandboxed smoke canary: watch/brief/grade + gate
     ernest onboard [--non-interactive] seed memory from answers
     ernest watch                       write remind-only cards
     ernest brief                       write + print the morning brief
     ernest draft --concern <id>        draft-only outreach for review
     ernest new-automation --id ...     register a concern + scaffold a skill
-    ernest learn [--note "..."]        summarize self-improvement proposals
+    ernest learn [--apply K|--rollback ID]  evidence-ranked improvement report; reversible applies
     ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
     ernest read [--owed] [--thread ID] cache full thread bodies to vault
     ernest grade [--b2b] [--talent]    tier inbound leads + talent (ICP rubrics)
@@ -29,7 +31,8 @@ from pathlib import Path
 
 from . import __version__, config
 from . import (automations, audit, brief, concerns, connect, draft, feedback,
-               grade_run, learn, onboard, preferences, read_threads, render, watch)
+               grade_run, health, improve, learn, onboard, preferences,
+               read_threads, render, selftest as selftest_mod, telemetry, watch)
 
 
 def _connectors(cfg: config.Config) -> list[str]:
@@ -75,50 +78,96 @@ def _diagnostics(cfg: config.Config) -> list[tuple[str, str]]:
     return issues
 
 
-def cmd_doctor(cfg: config.Config, _args: argparse.Namespace) -> int:
-    missing = [name for name in ("company-core.md", "ceo-persona.md", "standing-concerns.md")
-               if not (cfg.memory_dir / name).is_file()]
-    connectors = _connectors(cfg) or ["(none - local exports only)"]
-    cst = concerns.status(cfg)
-    enabled = [c.id for c in concerns.load(cfg) if c.enabled]
-    degraded = bool(missing) or cst.level == "error"
-    print("Ernest health check: ok" if not degraded else "Ernest health check: degraded")
+def cmd_doctor(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Doctor v2: four-state audit (WORKING / UNVERIFIED / BROKEN / OFF) with a
+    remedy per finding. `--json` is the machine surface the self-repair skill
+    and `ernest heal` consume."""
+    checks = health.run_checks(cfg)
+    if getattr(args, "json", False):
+        print(health.to_json(checks))
+        return 1 if any(c.state == health.BROKEN for c in checks) else 0
+
+    counts = health.summary(checks)
+    broken = [c for c in checks if c.state == health.BROKEN]
+    print("Ernest health check: " + ("ok" if not broken else "degraded"))
     print(f"mode: {cfg.mode}")
     print(f"profile: {cfg.profile_dir}")
     print(f"vault: {cfg.vault_dir}")
+    connectors = _connectors(cfg) or ["(none - local exports only)"]
     print(f"connectors: {', '.join(connectors)}")
-    if cfg.mode == "vps":
-        url = connect.resolve_url(cfg)
-        if not url:
-            print("brain: vps mode but no brain URL set — run /ernest-connect-brain or go local")
-        else:
-            ok, detail = connect.health_probe(url)
-            print(f"brain: reachable ({detail}) — {url}" if ok
-                  else f"brain: OFFLINE — {url} ({detail}); running on local fallback")
+    enabled = [c.id for c in concerns.load(cfg) if c.enabled]
+    print(f"active concerns: {', '.join(enabled) or '(none)'}")
     onboarded = (cfg.vault_dir / ".onboarded").is_file()
     print(f"onboarded: {'yes' if onboarded else 'no — running on SAMPLE data; run /ernest-setup to personalize'}")
-    print(f"active concerns: {', '.join(enabled) or '(none)'}")
-    if cst.level != "ok":
-        marker = "ERROR" if cst.level == "error" else "note"
-        print(f"watch concerns [{marker}]: {cst.message}")
-    if missing:
-        print(f"missing memory files: {', '.join(missing)}")
-        print("fix: restore them or run `./install.sh --refresh`.")
-        return 1
-    if cst.level == "error":
-        print("fix: your watch reminders are OFF. Tell Ernest to repair standing-concerns, "
-              "or run `/ernest-onboard` / setup again.")
-        return 1
+
+    print(f"\naudit: {counts[health.WORKING]} working · {counts[health.UNVERIFIED]} unverified · "
+          f"{counts[health.BROKEN]} broken · {counts[health.OFF]} off")
+    order = {health.BROKEN: 0, health.UNVERIFIED: 1, health.OFF: 2, health.WORKING: 3}
+    for c in sorted(checks, key=lambda c: (order[c.state], c.subsystem)):
+        if c.state == health.WORKING:
+            continue
+        tag = f"[{c.state}]"
+        fixable = " (auto-fixable: `ernest heal`)" if c.auto_fixable and c.state == health.BROKEN else ""
+        print(f"  {tag:<13} {c.id}: {c.evidence}{fixable}")
+        if c.remedy and c.remedy != "—":
+            print(f"                fix: {c.remedy}")
+
+    # Keep the legacy soft-diagnostics block: it is the guided-repair surface.
     issues = _diagnostics(cfg)
-    if issues:
-        print(f"\ndiagnostics: {len(issues)} thing(s) to improve (not fatal):")
-        for problem, fix in issues:
-            print(f"  - {problem}\n    fix: {fix}")
-        print("\nself-repair: run `/ernest-doctor` in Claude to auto-diagnose, "
-              "research missing tools, and propose fixes (approval-gated).")
-    else:
-        print("\ndiagnostics: all clear.")
+    non_working = counts[health.UNVERIFIED] + counts[health.BROKEN] + counts[health.OFF]
+    print(f"\ndiagnostics: {max(len(issues), non_working)} thing(s) surfaced "
+          f"({counts[health.BROKEN]} broken)." if (issues or non_working)
+          else "\ndiagnostics: all clear.")
+    print("self-repair: `ernest heal` fixes the safe class; run `/ernest-doctor` in Claude "
+          "to auto-diagnose the rest, research missing tools, and propose fixes (approval-gated).")
+    if broken:
+        health.write_health_card(cfg, checks)
+        return 1
     return 0
+
+
+def cmd_heal(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Safe-class auto-repair: snapshot -> fix -> re-check -> keep/report.
+    Everything non-auto-fixable escalates to a health card + /ernest-doctor."""
+    checks = health.run_checks(cfg)
+    broken = [c for c in checks if c.state == health.BROKEN]
+    if not broken:
+        print("Heal: nothing broken. (Audit: all checks WORKING/UNVERIFIED/OFF.)")
+        return 0
+    repairs = health.heal(cfg, checks)
+    fixed = [r for r in repairs if r.get("verified")]
+    for r in repairs:
+        state = "fixed+verified" if r.get("verified") else str(r.get("action"))
+        print(f"  - {r['check']}: {state}")
+    after = health.run_checks(cfg)
+    still = [c for c in after if c.state == health.BROKEN]
+    if still:
+        card = health.write_health_card(cfg, after)
+        print(f"Heal: {len(fixed)} fixed, {len(still)} still broken — escalated to a health card:")
+        for c in still:
+            print(f"  [BROKEN] {c.id}: {c.remedy}")
+        if card:
+            print(f"  - card: {card}")
+        print("Next: run `/ernest-doctor` in Claude for guided repair (approval-gated).")
+        return 1
+    print(f"Heal: {len(fixed)} repair(s) applied and verified. Log: {health.repairs_log(cfg)}")
+    if fixed and not getattr(args, "no_selftest", False):
+        ok, report = selftest_mod.run(cfg)
+        print("Post-heal selftest: " + ("PASS" if ok else "FAIL"))
+        if not ok:
+            for line in report:
+                print(line)
+            return 1
+    return 0
+
+
+def cmd_selftest(cfg: config.Config, _args: argparse.Namespace) -> int:
+    """Sandboxed smoke canary: watch -> brief -> grade in a throwaway profile."""
+    ok, report = selftest_mod.run(cfg)
+    for line in report:
+        print(line)
+    print("Selftest: " + ("PASS — the daily loop works end-to-end." if ok else "FAIL — see above."))
+    return 0 if ok else 1
 
 
 def cmd_connect_brain(cfg: config.Config, args: argparse.Namespace) -> int:
@@ -144,7 +193,19 @@ def cmd_update(cfg: config.Config, args: argparse.Namespace) -> int:
     if not script.is_file():
         print(f"self-update.sh not found at {script}")
         return 1
-    return subprocess.run(["bash", str(script), action]).returncode
+    rc = subprocess.run(["bash", str(script), action]).returncode
+    if rc == 0 and action in ("apply", "auto"):
+        # Promotion gate: an update that can't run its own daily loop is reported
+        # immediately (the updater already validated the gate; this adds the
+        # end-to-end canary on top).
+        ok, report = selftest_mod.run(cfg)
+        print("Post-update selftest: " + ("PASS" if ok else "FAIL"))
+        if not ok:
+            for line in report:
+                print(line)
+            print("Roll back with: scripts/self-update.sh status  (see previous-version notes)")
+            return 1
+    return rc
 
 
 def cmd_concern_toggle(cfg: config.Config, args: argparse.Namespace) -> int:
@@ -228,8 +289,10 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     except ValueError:
         pass
     cards = watch.run(cfg)
+    _log_watch_telemetry(cfg, cards)
     grade_run.run(cfg)
     path, summary = brief.run(cfg)
+    telemetry.log(cfg, "start", cards=len(cards))
     prefs = preferences.load(cfg)
     auto_render = preferences.truthy(prefs.get("auto_render", "on")) and not os.environ.get("ERNEST_NO_RENDER")
     digest = render.run(cfg) if auto_render else None
@@ -249,8 +312,18 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     return 0
 
 
+def _log_watch_telemetry(cfg: config.Config, paths: list) -> None:
+    per_concern = {p.name.split("--", 1)[0]: telemetry.card_items(p) for p in paths}
+    # Concerns that ran but produced no card still count as a quiet run.
+    for c in concerns.load(cfg):
+        if c.enabled:
+            per_concern.setdefault(c.id, 0)
+    telemetry.log(cfg, "watch", cards=len(paths), concerns=per_concern)
+
+
 def cmd_watch(cfg: config.Config, _args: argparse.Namespace) -> int:
     paths = watch.run(cfg)
+    _log_watch_telemetry(cfg, paths)
     if not paths:
         print("Watch: nothing slipped. No cards needed.")
         return 0
@@ -269,6 +342,9 @@ def cmd_brief(cfg: config.Config, _args: argparse.Namespace) -> int:
 
 def cmd_draft(cfg: config.Config, args: argparse.Namespace) -> int:
     path = draft.run(cfg, concern_id=args.concern, contact=args.contact)
+    # "CEO asked to draft" is the strongest acted-on signal a card can get.
+    telemetry.log(cfg, "draft", concern=args.concern, contact=args.contact,
+                  produced=bool(path))
     if path is None:
         print("Draft: nothing to draft for that selection.")
         return 0
@@ -340,7 +416,12 @@ def cmd_feedback(cfg: config.Config, args: argparse.Namespace) -> int:
         print("Tell me what to change, e.g. `ernest feedback \"answers too long\"`.")
         return 2
     feedback.record(cfg, note)
-    print("Noted. I logged your feedback and will fold it into how I work.")
+    signal = learn.classify(note)
+    if signal:
+        print(f"Noted — that reads like a {signal.replace('_', ' ')} signal; it feeds the "
+              "weekly improvement pass (`ernest learn`).")
+    else:
+        print("Noted. I logged your feedback and will fold it into how I work.")
     print(f"  - log: {feedback.log_path(cfg)}")
     print("  - lasting preferences live in memory/preferences.md (ask me to update them).")
     return 0
@@ -385,6 +466,31 @@ def cmd_audit(cfg: config.Config, args: argparse.Namespace) -> int:
 def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
     if args.note:
         learn.add_note(cfg, args.note)
+    if getattr(args, "apply", None):
+        try:
+            result = improve.apply(cfg, args.apply)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        entry = result["entry"]
+        if result["applied"]:
+            print(f"Applied '{args.apply}' -> {entry['target']} (id {entry['id']}, "
+                  f"selftest {entry.get('selftest', 'skipped')}).")
+            print(f"Roll back anytime: `ernest learn --rollback {entry['id']}`")
+            return 0
+        print(f"NOT kept: '{args.apply}' — the sandbox selftest failed after applying, "
+              "so the change was reverted automatically.")
+        for line in result.get("selftest_report", []):
+            print(line)
+        return 1
+    if getattr(args, "rollback", None):
+        try:
+            result = improve.rollback(cfg, args.rollback)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        print(f"Rolled back {result['rolled_back']} (via {result['via']}).")
+        return 0
     if args.adopt is not None:
         if not args.id or not args.playbook:
             print("Error: --adopt requires --id and --playbook.", file=sys.stderr)
@@ -402,8 +508,16 @@ def cmd_learn(cfg: config.Config, args: argparse.Namespace) -> int:
         print("Run `ernest watch` to put it to work immediately.")
         return 0
     path = learn.summarize(cfg)
+    improve.append_report(cfg, path)
+    proposals = improve.generate(cfg)
+    ready = [p for p in proposals if p["ready"] and p.get("diff")]
     print("Learn: proposals are candidates only and need CEO approval (L2).")
-    print(f"Adopt one with `ernest learn --adopt <n> --id <id> --playbook <p>`.")
+    if ready:
+        print(f"{len(ready)} typed proposal(s) READY (evidence-backed, reversible):")
+        for p in ready[:5]:
+            print(f"  - {p['title']}")
+            print(f"    apply: ernest learn --apply {p['key']}")
+    print("Adopt a new automation with `ernest learn --adopt <n> --id <id> --playbook <p>`.")
     print(f"  - {path}")
     return 0
 
@@ -414,7 +528,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("start", help="the one command: watch + brief").set_defaults(func=cmd_start)
-    sub.add_parser("doctor", help="health + config snapshot").set_defaults(func=cmd_doctor)
+    p_doc = sub.add_parser("doctor", help="four-state health audit + config snapshot")
+    p_doc.add_argument("--json", action="store_true", help="machine-readable audit (for /ernest-doctor)")
+    p_doc.set_defaults(func=cmd_doctor)
+
+    p_heal = sub.add_parser("heal", help="auto-fix the safe class of broken checks (verified, logged)")
+    p_heal.add_argument("--no-selftest", action="store_true", dest="no_selftest",
+                        help="skip the post-heal sandbox selftest")
+    p_heal.set_defaults(func=cmd_heal)
+
+    sub.add_parser("selftest", help="sandboxed smoke canary: watch/brief/grade + gate").set_defaults(
+        func=cmd_selftest)
 
     p_cb = sub.add_parser("connect-brain", help="point this surface at the VPS brain (shared memory/cards)")
     p_cb.add_argument("--url", help="brain URL, e.g. https://brain.example.com (else env/persisted)")
@@ -453,10 +577,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_na.add_argument("--window")
     p_na.set_defaults(func=cmd_new_automation)
 
-    p_ln = sub.add_parser("learn", help="summarize / adopt self-improvement proposals")
-    p_ln.add_argument("--note", help="record an observed repetition by hand")
+    p_ln = sub.add_parser("learn", help="evidence-ranked improvement report; apply/rollback typed changes")
+    p_ln.add_argument("--note", help="record an observed repetition/correction by hand")
     p_ln.add_argument("--adopt", type=int, metavar="N",
                       help="promote proposal #N into a live automation (approval step)")
+    p_ln.add_argument("--apply", metavar="KEY",
+                      help="apply a typed proposal by key (snapshot + selftest + logged; reversible)")
+    p_ln.add_argument("--rollback", metavar="ID",
+                      help="roll back an applied change by its id (see Applied changes)")
     p_ln.add_argument("--id", help="concern id when adopting")
     p_ln.add_argument("--playbook", help="playbook when adopting")
     p_ln.add_argument("--staleness")
@@ -517,7 +645,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     cfg = config.load()
-    return args.func(cfg, args)
+    try:
+        return args.func(cfg, args)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:  # noqa: BLE001 — the engine never breaks silently
+        import traceback
+        traceback.print_exc()
+        health.record_failure(cfg, getattr(args, "command", "?"), exc)
+        print(f"\nernest {getattr(args, 'command', '?')} crashed — captured to "
+              f"{health.repairs_log(cfg)} and a health card. Run `ernest doctor`.",
+              file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

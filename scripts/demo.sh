@@ -40,6 +40,34 @@ ernest learn --adopt 1 --id partner-renewals \
   --playbook account-followup-recovery --staleness 7d
 ernest start
 
+step "6. Self-heal: break config on purpose -> doctor detects -> heal restores"
+ernest doctor > /dev/null || true            # healthy audit takes last-good snapshots
+printf '# broken\n```yaml\nconcerns: [oops\n' > "$PROFILE/memory/standing-concerns.md"
+ernest doctor > /dev/null 2>&1 && echo "UNEXPECTED: corruption not detected" || \
+  echo "doctor: BROKEN detected (watch reminders would be silently OFF)"
+ernest heal --no-selftest
+grep -q "partner-renewals" "$PROFILE/memory/standing-concerns.md" \
+  && echo "heal: standing-concerns restored from last-good snapshot (adopted concern intact)"
+
+step "7. Self-improve: corrections -> evidence-ranked proposal -> apply -> rollback"
+ernest feedback "Acme Robotics was actually tier-1" > /dev/null
+ernest feedback "again: Acme Robotics was actually tier-1" > /dev/null
+ernest feedback "third time: Acme Robotics was actually tier-1" > /dev/null
+ernest learn | sed -n '1,6p'
+ernest learn --apply rubric-acme-robotics-tier-1 | sed -n '1,2p'
+APPLIED_ID="$(python3 - <<'PY'
+import json, os, pathlib
+log = pathlib.Path(os.environ["ERNEST_PROFILE_DIR"]) / "logs" / "applied.jsonl"
+entries = [json.loads(l) for l in log.read_text().splitlines() if l.strip()]
+print(next(e["id"] for e in reversed(entries) if e["action"] == "apply"))
+PY
+)"
+ernest learn --rollback "$APPLIED_ID"
+
+step "8. Selftest (the promotion-gate canary)"
+ernest selftest | tail -1
+
 step "Artifacts"
 find "$VAULT/Ernest" -type f | sort
-printf '\nSandbox: rm -rf %s\n' "$SANDBOX"
+printf '\nLoops log trail: %s\n' "$PROFILE/logs (usage.jsonl, repairs.jsonl, applied.jsonl, versions/, snapshots/)"
+printf 'Sandbox: rm -rf %s\n' "$SANDBOX"

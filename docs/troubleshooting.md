@@ -6,7 +6,13 @@ Something not working? In almost every case the fastest fix is one command:
 ernest doctor
 ```
 
-It prints your mode, profile path, active connectors, and a `diagnostics:` block. Each issue comes with its own `fix:` line. If a fix needs research or installs, run `/ernest-doctor` inside Claude — Ernest will diagnose, look up the right tool, apply safe in-workspace fixes, and ask before anything that touches credentials or sends.
+It prints a four-state health audit — every subsystem is **WORKING**, **UNVERIFIED** (configured but unproven), **BROKEN** (something you rely on will misbehave), or **OFF** (intentionally disabled) — and each non-WORKING check carries its own remedy line. For the safe, reversible class of breakage (a corrupt rubric, a missing vault dir, broken concerns YAML), one more command fixes it and verifies the fix:
+
+```bash
+ernest heal      # auto-fix the safe class, re-check each fix, roll back anything that doesn't clear
+```
+
+If a fix needs research or installs, run `/ernest-doctor` inside Claude — Ernest will diagnose, look up the right tool, apply safe in-workspace fixes, and ask before anything that touches credentials or sends. `ernest doctor --json` is the machine-readable form that drives it.
 
 Use the table below to jump straight to your symptom.
 

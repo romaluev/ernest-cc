@@ -42,7 +42,9 @@ ernest/gate.py"}
 ernest start      # watch for what slipped + write the morning brief
 ```
 
-Everything else is optional: `ernest read`, `ernest grade`, `ernest draft`, `ernest audit`, `ernest new-automation`, `ernest learn`, `ernest render`, `ernest doctor`. Prompt examples that map plain English to these: [examples.md](examples.md).
+Everything else is optional: `ernest read`, `ernest grade`, `ernest draft`, `ernest audit`, `ernest new-automation`, `ernest learn`, `ernest render`, `ernest doctor`, `ernest heal`, `ernest selftest`. Prompt examples that map plain English to these: [examples.md](examples.md).
+
+**Self-healing & self-improving** — `ernest doctor` runs a four-state health audit (WORKING / UNVERIFIED / BROKEN / OFF, `--json` for the repair skill); `ernest heal` auto-fixes the safe class with verify-or-rollback; `ernest selftest` is the sandboxed smoke check. `ernest learn` turns captured session corrections and usage telemetry into evidence-ranked, reversible improvement proposals (`--adopt` / `--rollback`). The design basis for all three loops is in [research/self-improving-systems.md](research/self-improving-systems.md).
 
 **AI layer** — `CLAUDE.md` (Ernest's identity and hard rules), plus *skills* (reusable playbooks like `morning-brief` or `b2b-lead-grading`), *commands* (slash shortcuts like `/ernest-setup`), and *subagents* (focused helpers in `agents/`). This is the natural-language interface. When live connectors or the VPS brain are available it reasons over real data; otherwise it falls back to the engine's deterministic output. You never have to remember a command — you describe what you want and the AI layer translates it into engine actions.
 

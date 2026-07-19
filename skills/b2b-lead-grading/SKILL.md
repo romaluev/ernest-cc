@@ -1,7 +1,7 @@
 ---
 name: b2b-lead-grading
 description: Grade and sort inbound B2B leads/threads into Tier-1, Tier-2, or Trash so the CEO only sees what matters. Use when triaging inbound, deciding who to reply to first, qualifying a prospect, or asking "is this worth my time?". Be generous on real fit, strict on trash; rank by match strength. Remind/assign only; never auto-reply.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # B2B Lead Grading
@@ -19,16 +19,61 @@ mean onboarding hasn't run — ask the user their company + ICP first.)
 3. **Inference** — content + public knowledge. Can't confirm a Tier-1 claim
    (e.g. market-leader)? **Flag low confidence**; don't guess.
 
-## Grade widely, rank by score (fixes "too narrow / bad sort")
+## Decision criteria — the actual scoring model
+
+Source of truth: `ernest/grading.py` (**code wins**; the contract test keeps this
+table honest). Decision order, then score:
+
+1. **CRM tier present → done.** `crm_tier_map` (vip/enterprise/investor/strategic
+   → tier-1; partner/smb → tier-2), confidence high, score 100 (tier-1) / 60.
+2. **Any Tier-1 signal → tier-1.** Score adds per DISTINCT list hit (density —
+   two signals beat one):
+
+   | Signal (list in b2b-rubric.json) | Weight |
+   |---|---|
+   | `tier1.categories` (ai studio, ad agency, …) | +8 each |
+   | `tier1.providers` (openai, aws, nvidia, …) | +12 each |
+   | `tier1.companies` (google, wpp, coca-cola, …) | +12 each |
+   | `tier1.people` (named high-reputation people) | +15 each |
+   | `tier1.intent_keywords` (procurement, msa, rfp, …) | +6 each |
+   | CEO reference OR CRM prior contact (either) | +14 once |
+   | Fund with AUM > `fund_aum_threshold_busd` ($2B) | +15 |
+
+   Confidence: **high** if any structural hit (category/provider/company/person/
+   reputation/prior/fund); **medium** if intent keywords only.
+3. **Trash signals** (only when no Tier-1 hit): `trash.vendor_keywords`
+   ("we offer", backlink, seo services…) → trash/medium/0. Small-media words →
+   trash/low with the flag "confirm <~100k readers, else Tier-2 media".
+4. **Nothing decisive → tier-2, low, score 2** + a verify flag. Never silent
+   Tier-1, never silent trash.
+
+Sort order everywhere: `(tier rank, −score, −days waiting)`.
+
+**Worked example** (run it: these are engine-true): text "we are an ai studio
+planning an enterprise rollout, procurement started" → categories `ai studio`,
+`enterprise` (+8×2) + intents `enterprise`, `procurement`, `rollout` (+6×3) =
+**34, tier-1, high**. A $6B fund with no other signal = **15, tier-1, high**.
+The sample vendor pitch ("We offer SEO services + backlinks") = **0, trash**.
+
+**Config footgun:** the JSON **replaces** code defaults wholesale — deleting a
+key (e.g. `trash`) silently turns that whole signal family OFF. Edit lists,
+never delete keys; `ernest doctor` flags missing keys as UNVERIFIED.
+
+| Symptom | Diagnosis | Knob | Where it lives |
+|---|---|---|---|
+| Real buyer graded tier-2 | list too narrow | add company/category | `data/grading/b2b-rubric.json` (or 3× `ernest feedback "X was actually tier-1"` → `ernest learn` proposes the diff) |
+| Vendor spam reaching Tier-2 | vendor phrasing not listed | add to `trash.vendor_keywords` | same file |
+| Everything Tier-1 | lists too broad / CRM tiers stale | prune lists; fix CRM tiers | rubric + HubSpot |
+| Wrong order inside a tier | score too flat | weights | `ernest/grading.py` (engine change — propose, don't hand-edit) |
+
+## Grade widely, rank by score
 
 - The rubric lists are a **seed, not a limit.** Recognize ICP fit beyond the
   literal list: a small-but-famous AI studio, a known agency, a real enterprise
   buyer, or genuine enterprise intent all count even if not listed — use public
-  knowledge and note it.
+  knowledge and note it (that's the inference tier: flag it).
 - **Don't over-trash.** Only obvious cold vendor/SEO/backlink pitches are trash.
   An ambiguous lead is Tier-2 with a flag, not trash — surface it.
-- Sort by the **match score** the engine now emits (Tier first, then score), so
-  the strongest leads lead each tier instead of date order.
 
 ```bash
 ernest grade --b2b
@@ -50,9 +95,19 @@ lead:
   source: "<thread_id / CRM record>"
 ```
 
+## Verification (engine optional — sample data)
+
+`ERNEST_TODAY=2026-06-25 ernest grade --b2b` on the shipped samples: the card
+shows `items: 11 (tier-1: 3, tier-2: 7, trash: 1)`; Apex Bank leads with
+`CRM tier 'vip' -> tier-1 … match score: 100`; the GrowthHooks vendor pitch is
+`[TRASH] … Cold vendor pitch: 'we offer'`. If your numbers differ, the rubric
+JSON or code changed — re-read both before trusting grades.
+
 ## Hard rules
 
 - Remind/assign only. Drafts happen only on the CEO's explicit "draft these".
 - Conflicting signals → take the **higher** tier and note the conflict.
 - A strategic-but-small account that fits the ICP is Tier-1 on fit, not size.
 - Trash is a recommendation to archive/decline — never an auto-send.
+- Tier corrections are learning signals: log them (`ernest feedback "<who> was
+  actually <tier>"`); at 3× the improvement loop proposes the rubric diff.

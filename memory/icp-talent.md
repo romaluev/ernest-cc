@@ -4,6 +4,10 @@ How Ernest grades talent for outreach. The **current** outreach plan targets the
 **ex-NovaLabs** alumni pool — but this is a snapshot that will change. The pool
 and the signal lists are living config, not hardcoded.
 
+*(This file is the POLICY — what the tiers mean + the hard filter. The scoring
+mechanism lives in `skills/talent-sourcing-grading/SKILL.md` §Decision criteria;
+the signal lists live in `data/grading/talent-rubric.json`.)*
+
 **To change the criteria** (no code edits): edit `data/grading/talent-rubric.json`
 (`pool`, Big-Tech names, AI-media models, Tier-1 countries, etc.), or just tell
 Ernest — e.g. "switch our talent focus from ex-NovaLabs to ex-FAANG designers";

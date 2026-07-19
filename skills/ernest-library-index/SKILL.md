@@ -27,6 +27,7 @@ version: 1.0.0
 | `hiring-pipeline` | (connector) | Ashby stage tracking + interview prep | read + assign |
 | `deal-desk` | (connector) | HubSpot → Ironclad contract workflow (pilot) | status + draft (L3 sign) |
 | `ernest-watch` | (orchestration) | Run all concerns | remind |
+| `getting-started` | (meta) | First-run onboarding conversation | setup |
 | `ernest-self-repair` | (meta) | Diagnose + fix/extend Ernest itself | repair |
 | `ernest-preferences` | (meta) | Learn + apply CEO's format/autonomy taste | adapt |
 | `ernest-use-case-author` | (meta) | Propose new automations | proposal |
@@ -50,6 +51,7 @@ version: 1.0.0
 - Support load / tickets / self-serve (Pylon/Zendesk/Fin) → `support-triage`
 - Hiring status / interview prep / stalled candidates (Ashby) → `hiring-pipeline`
 - Contracts / redlines / deal-desk status (Ironclad/MATIC) → `deal-desk` (pilot, L3-gated)
+- First run / "set me up" / new user → `getting-started` / `/ernest-onboard`
 - Something broken / tool missing / "fix it" → `ernest-self-repair` / `/ernest-doctor`
 - New automation → `ernest-use-case-author` or `ernest new-automation`
 - Change ICP / grading / talent pool → edit `data/grading/*.json` + `memory/icp-*.md`, re-run `ernest grade`

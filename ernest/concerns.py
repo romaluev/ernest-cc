@@ -96,6 +96,13 @@ def status(cfg: Config) -> ConcernsStatus:
         return ConcernsStatus(enabled, "ok", f"{enabled} active watch concern(s).")
     # Zero concerns parsed — is the file broken, or genuinely empty?
     if not has_fence:
+        if re.search(r"```ya?ml", text):
+            # Fence opened but never closed — a truncated/partial write. Without
+            # this case a half-written file reads as "no concerns yet" and the
+            # product silently goes dark.
+            return ConcernsStatus(0, "error",
+                "standing-concerns.md opens a ```yaml block that never closes (truncated file?) — "
+                "ALL watch reminders are OFF. Restore the file or close the fence.")
         if "- id:" in text or "playbook" in text or len(text.strip()) > 200:
             return ConcernsStatus(0, "error",
                 "standing-concerns.md has content but its ```yaml block is missing/mis-typed — "

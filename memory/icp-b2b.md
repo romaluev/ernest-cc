@@ -3,6 +3,10 @@
 How Ernest sorts inbound B2B. Goal: spend Alex's reply time on Tier-1, handle
 Tier-2 efficiently, and drop trash. **Grade, don't chase everyone.**
 
+*(This file is the POLICY — what the tiers mean. The scoring mechanism — decision
+order, weights, worked example — lives in `skills/b2b-lead-grading/SKILL.md`
+§Decision criteria; the signal lists live in `data/grading/b2b-rubric.json`.)*
+
 Primary ICP: **AI studios and ad/creative agencies**. Brands and others count
 too, but qualify by the tiers below.
 

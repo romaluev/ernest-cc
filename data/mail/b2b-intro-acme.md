@@ -2,7 +2,7 @@
 
 source: local-export
 channel: email
-thread_id: b2b-intro-bridgeai
+thread_id: b2b-intro-acme
 contact: Priya Shah
 company: Acme Corp
 category: b2b
