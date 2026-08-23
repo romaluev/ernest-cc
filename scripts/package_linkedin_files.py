@@ -105,7 +105,14 @@ GAPS=()
 step() { printf '  [%s] %s\\n' "$1" "$2"; }
 gap()  { GAPS+=("$1"); }
 
-echo ""; echo "LinkedIn inbound triage — setup"; echo "==============================="
+echo ""
+if [ -f "$HERE/BUILD.txt" ]; then
+  echo "LinkedIn inbound triage — $(sed -n 1p "$HERE/BUILD.txt")"
+  sed -n '2,4p' "$HERE/BUILD.txt" | sed 's/^/  /'
+else
+  echo "LinkedIn inbound triage — setup"
+fi
+echo "==============================="
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found. Install Python 3.9+." >&2; exit 10; }
 PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
@@ -127,9 +134,18 @@ else
 fi
 
 if python3 "$HERE/linkedin_triage.py" --grade-only >/dev/null 2>&1; then
-  step ok "graded the sample queue — reports/ written"
+  # Check BOTH halves. A bundle that silently ships only invitations looks
+  # healthy from here, and that is precisely what went out once before.
+  for want in linkedin-invitations linkedin-dms; do
+    if ls "$HERE"/reports/Ernest/00-Watch/$want--*.md >/dev/null 2>&1; then
+      step ok "$want report written"
+    else
+      step "--" "no $want report"
+      gap "That half of the bundle produced nothing. Run \\`python3 linkedin_triage.py\\` and read the error."
+    fi
+  done
 else
-  step "--" "could not produce a report yet"
+  step "--" "could not produce a report at all"
   gap "Run \\`python3 linkedin_triage.py\\` and read the error."
 fi
 
@@ -327,10 +343,19 @@ deliberate.
 
 ## Setup
 
+**Install in place.** This folder IS the install — it keeps its data, reports and
+schedule right here. Do not copy it into `~/Documents` or anywhere else that
+triggers a macOS folder-permission prompt; unzip it wherever the user already
+has write access and run it there. If a permission dialog appears, you are in
+the wrong directory.
+
 ```bash
 ./install.sh                 # verify, first report, tests, daily 08:00 schedule
 ./install.sh --no-cron       # skip the schedule
 ```
+
+`BUILD.txt` names the exact build. Read it before debugging anything — if
+someone reports a bug you cannot reproduce, check their build first.
 
 Exit `0` ready · `1` ready with gaps (each gap names its fix) · `10`
 unrecoverable — stop and report it.

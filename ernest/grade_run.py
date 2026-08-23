@@ -285,6 +285,9 @@ def _linkedin_card(cfg: Config, analyzed, csv_path: Path,
         f"Full population: {csv_path.name}",
         "",
     ]
+    banner = _sample_data_banner([inv.public_url or inv.name for inv, _, _ in analyzed])
+    if banner:
+        lines += [banner, ""]
     if prev:
         bits = []
         if diff.new:
@@ -474,6 +477,25 @@ def _dm_sidecar(cfg: Config, graded: List[Tuple[Conversation, LinkedInDMGrade]])
     return path
 
 
+def _sample_data_banner(rows: List[str]) -> Optional[str]:
+    """Say plainly when a report is built on the shipped sample rows.
+
+    Otherwise the only tell is that the names end in "-sample", which a reader
+    has to notice for themselves — and a convincing report about fictional
+    people is worse than no report.
+    """
+    if not rows:
+        return None
+    fake = sum(1 for r in rows if "-sample" in (r or "").lower())
+    if fake and fake >= len(rows) * 0.5:
+        return ("> **This is SAMPLE data — these people are not real.** "
+                f"{fake} of {len(rows)} rows are the shipped fixtures. "
+                "Import a real export to replace them: LinkedIn -> Settings -> "
+                "Data Privacy -> Get a copy of your data -> tick Invitations and "
+                "Messages, then run the ingest with --from-archive <the zip>.")
+    return None
+
+
 def _dm_state_path(cfg: Config) -> Path:
     return cfg.logs_dir / "linkedin-dms-state.json"
 
@@ -549,6 +571,9 @@ def _linkedin_dm_card(cfg: Config, analyzed, csv_path: Path, prev: Dict[str, obj
         f"Full population: {csv_path.name}",
         "",
     ]
+    banner = _sample_data_banner([c.counterparty_url or c.counterparty for c, _, _ in analyzed])
+    if banner:
+        lines += [banner, ""]
     if prev:
         bits = []
         if diff.new:
