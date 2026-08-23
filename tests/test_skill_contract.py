@@ -47,6 +47,8 @@ CONTRACT: dict[str, list[str]] = {
     "slack-task-tracker": V2_HEADERS,
     "inbox-prospect-followup": ["## Decision criteria", "## Draft", "## Output",
                                 "## Failure modes", "## Verification"],
+    "linkedin-invitations": V2_HEADERS + ["## Prerequisites", "## When NOT to use",
+                                          "## Fallbacks", "## Exit codes", "## Edge cases"],
     "support-triage": ["## Decision criteria", "## Draft", "## Output",
                        "## Failure modes", "## Verification"],
     "b2b-lead-grading": ["## Signal priority", "## Decision criteria", "## Output",
@@ -61,7 +63,7 @@ CONTRACT: dict[str, list[str]] = {
 FOOTER = "Reply draft these when you want me to prepare actions."
 CARD_SKILLS = ["sourcing-pipeline", "candidate-followup", "add-collaborator",
                "list-sync", "slack-task-tracker", "inbox-prospect-followup",
-               "ernest-watch"]
+               "linkedin-invitations", "ernest-watch"]
 
 # Row-label -> weight-key mapping for the docs-vs-code parity check.
 B2B_ROWS = {"categories": "category", "providers": "provider", "companies": "company",
