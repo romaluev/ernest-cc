@@ -143,6 +143,9 @@ copy_code() {
   _swap_file ernest.yaml
   _swap_dir hooks
   _swap_dir ernest
+  # Connector adapters. These run OUTSIDE the gate (cron/launchd drives them), so
+  # they ship with core and are replaced wholesale like the engine.
+  _swap_dir adapters
   # Output styles make Claude answer in one consistent house format every turn.
   _swap_dir .claude
   # Overlay dirs: compose core + custom so CEO additions/overrides always survive.
@@ -211,6 +214,7 @@ health_check() {
   require_file "skills/support-triage/SKILL.md"
   require_file "skills/hiring-pipeline/SKILL.md"
   require_file "skills/lead-enrichment/SKILL.md"
+  require_file "skills/linkedin-invitations/SKILL.md"
   require_file "skills/deal-desk/SKILL.md"
   require_file "commands/ernest-brief.md"
   require_file "scripts/self-update.sh"

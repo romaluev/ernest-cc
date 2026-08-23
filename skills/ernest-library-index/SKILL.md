@@ -19,6 +19,7 @@ version: 1.0.0
 | `slack-task-tracker` | `task-tracker` | Open/overdue tasks by owner | assign |
 | `read-thread` | (read) | Full thread bodies before watch/draft | read |
 | `b2b-lead-grading` | (grade) | Tier inbound B2B (Tier-1/2/Trash) | grade |
+| `linkedin-invitations` | (grade) | Tier pending LinkedIn invites; spam vs hold | grade + draft |
 | `talent-sourcing-grading` | (grade) | Tier talent, ex-NovaLabs pool | grade |
 | `lead-enrichment` | (connector) | Enrich lead/company via Clay + Apollo | read + propose |
 | `call-prep` | (connector) | One-pager before a call/meeting | read + draft |
@@ -44,6 +45,7 @@ version: 1.0.0
 - Task ownership → `slack-task-tracker`
 - Full thread read (email/Slack) → `read-thread` / `ernest read`
 - Triage/qualify inbound B2B → `b2b-lead-grading` / `ernest grade --b2b`
+- LinkedIn invitations / "clean up my invites" / LinkedIn spam → `linkedin-invitations` / `ernest grade --linkedin`
 - Qualify candidates (ex-NovaLabs) → `talent-sourcing-grading` / `ernest grade --talent`
 - "Who is this" / enrich lead or list (Clay/Apollo) → `lead-enrichment`
 - Prep for a call/meeting/deal → `call-prep` / `/ernest-call-prep`

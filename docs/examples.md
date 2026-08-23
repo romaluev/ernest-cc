@@ -72,6 +72,19 @@ Drop obvious cold/SEO/vendor spam. Rank each tier by match strength, give one-li
 reasons, and flag anything you're unsure about. Don't reply — just sort.
 ```
 
+**Clean up LinkedIn inbound** — `ernest grade --linkedin` → card `linkedin-invitations`
+```text
+Go through my pending LinkedIn invitations. Tier them against our ICP, separate the
+obvious spam from people I just can't place, and hold anything from press, investors,
+or competitors for me. Just the report — don't accept or ignore anything yet.
+```
+
+**Then act, in batches** — skill `linkedin-invitations` (L2, capped, reversible only)
+```text
+Remove the spam. Show me the exact list you'd ignore first, in batches, and stop
+after the daily cap. Never report anyone as spam without naming them.
+```
+
 **Don't run B2B threads solo** — card `b2b-collaborator-coverage`
 ```text
 Find B2B/partnership threads where I'm the only person from our side. For each, say
