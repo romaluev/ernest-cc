@@ -18,6 +18,7 @@ scope:
   write:
     - "memory/**"
     - "logs/**"
+    - "data/linkedin/**"
     - "${ERNEST_LOCAL_VAULT}/**"
     # Default vault paths too, so the agentic watch-card write path works even
     # when ERNEST_LOCAL_VAULT isn't exported into the Claude/Cowork session env.
@@ -88,3 +89,31 @@ hygiene_policy:
   snapshot_dir: "${ERNEST_LOCAL_VAULT}/Ernest/Hygiene/snapshots"
   audit_log: "logs/hygiene-audit.log"
   active_run_marker: "logs/hygiene-active-run.json"
+
+# LinkedIn inbound. Report-only until a human approves a named batch in chat.
+# Caps live here, not in code, so tuning them is a config change with an audit
+# trail. Accepting and ignoring are reversible; reporting someone as spam is not,
+# and never graduates past L2 no matter how clean the run history looks.
+linkedin_policy:
+  job_id: ernest-linkedin-inbound
+  dry_run: true
+  approved: false
+  # Let `ernest start` walk the ingest ladder when the queue is stale. Off by
+  # default: spawning a browser is not something a report command should begin
+  # doing by surprise. The 07:45 scheduled job refreshes it either way.
+  auto_ingest: false
+  max_named_on_card: 15
+  caps_per_day:
+    accept: 25
+    ignore: 100
+    report_spam: 25
+  min_action_interval_seconds: 20
+  never_auto:
+    - report_spam        # not reversible, and it affects the other account
+    - reply
+    - inmail
+  hold_lists: [411, 400, 412, 413, 414, 485, 484]
+  ingest_max_age_hours: 20
+  audit_log: "logs/linkedin-actions.log"
+  decision_journal: "logs/linkedin-decisions.jsonl"
+  snapshot_dir: "${ERNEST_LOCAL_VAULT}/Ernest/LinkedIn/snapshots"
