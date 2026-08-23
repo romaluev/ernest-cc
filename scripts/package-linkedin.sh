@@ -13,9 +13,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${LI_BUNDLE_VERSION:-2.0.0}"
 OUT="$ROOT/dist"
+SEED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) shift; OUT="${1:-$OUT}" ;;
+    # Bake a real rubric/identity into the zip so the recipient needs nothing
+    # else. Use for a private handover; never for anything published.
+    --seed) shift; SEED="${1:-}" ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) echo "unknown flag $1" >&2; exit 2 ;;
   esac
@@ -23,6 +27,7 @@ while [ $# -gt 0 ]; do
 done
 
 NAME="linkedin-inbound-$VERSION"
+SUFFIX=""
 STAGE="$(mktemp -d)/$NAME"
 mkdir -p "$STAGE"
 
@@ -74,11 +79,18 @@ mkdir -p "$STAGE/docs"
 cp "$ROOT/docs/ingest-ladder.md" "$ROOT/docs/linkedin-spec.md" "$STAGE/docs/"
 say "docs: the ingest ladder and the full decision spec"
 
+if [ -n "$SEED" ] && [ -d "$SEED" ]; then
+  [ -d "$SEED/data/grading" ] && cp "$SEED/data/grading"/*.json "$STAGE/data/grading/" 2>/dev/null
+  [ -d "$SEED/memory" ] && mkdir -p "$STAGE/memory" && cp "$SEED/memory"/*.md "$STAGE/memory/" 2>/dev/null
+  say "seeded with the real rubric and identity from $SEED"
+  SUFFIX="-private"
+fi
+
 python3 "$ROOT/scripts/package_linkedin_files.py" "$STAGE" "$VERSION"
 say "README (human), AGENTS.md (agent), install.sh, cron, engine shim"
 
 mkdir -p "$OUT"
-ZIP="$OUT/$NAME.zip"
+ZIP="$OUT/$NAME${SUFFIX:-}.zip"
 rm -f "$ZIP"
 ( cd "$(dirname "$STAGE")" && zip -qr "$ZIP" "$NAME" -x '*__pycache__*' '*.pyc' )
 rm -rf "$(dirname "$STAGE")"

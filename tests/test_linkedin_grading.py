@@ -61,9 +61,17 @@ def main() -> int:
     check("press proposes a hold, never an Ignore or Accept",
           r.action.startswith("Hold") and r.action.split()[0] not in ("Ignore", "Accept"), r.action)
 
-    r = g(**{**bait, "headline": "Head of Product at Novaframe, ex-AI studio founder"})
-    check("competitor beats tier-1 signals", r.tier == "hold", f"got {r.tier}")
-    check("competitor is Do Not Contact, not Positive", r.signal == "Do Not Contact", r.signal)
+    # Take a competitor from whatever rubric is loaded rather than hardcoding a
+    # name. This suite ships inside the standalone bundle, where the rubric may
+    # be the real one — the BEHAVIOUR is what must hold, not one demo list.
+    rubric = json.loads((ROOT / "data" / "grading" / "linkedin-rubric.json").read_text(encoding="utf-8"))
+    competitors = rubric.get("hold", {}).get("competitor_keywords") or []
+    check("the rubric names at least one competitor", bool(competitors),
+          "hold.competitor_keywords is empty — that check is switched off")
+    if competitors:
+        r = g(**{**bait, "headline": f"Head of Product at {competitors[0]}, ex-AI studio founder"})
+        check("competitor beats tier-1 signals", r.tier == "hold", f"got {r.tier}")
+        check("competitor is Do Not Contact, not Positive", r.signal == "Do Not Contact", r.signal)
 
     r = g(**bait, suppression_lists=["399"])
     check("employees are accepted, not trashed",

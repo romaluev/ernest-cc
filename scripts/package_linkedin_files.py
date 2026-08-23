@@ -54,6 +54,10 @@ def main() -> int:
     args = ap.parse_args()
 
     os.environ.setdefault("ERNEST_PROFILE_DIR", str(HERE))
+    # A seeded bundle ships memory/ceo-persona.md next to this file; the engine
+    # reads <profile>/memory, and the profile IS this directory, so it is picked
+    # up with no extra wiring. That file pins the account owner, which decides
+    # the direction of every message in the inbox.
     os.environ.setdefault("ERNEST_LOCAL_VAULT", str(HERE / "reports"))
     os.environ.setdefault("ERNEST_MODE", "local")
 
@@ -164,79 +168,96 @@ exit 1
 # --------------------------------------------------------------------------- #
 write("README.md", f'''# LinkedIn inbound triage — v{VERSION}
 
-Turn thousands of pending LinkedIn connection invitations into a page you act on
-in two minutes, without accepting a competitor, ignoring a journalist, or
-reporting a customer as spam.
+## If you only read one line
 
-**It reports. It does not act.** Accepting, ignoring, and reporting only happen
-after you approve a batch that names every person in it.
+Open Claude Code in this folder and say:
 
-## Setup
+> **"Read AGENTS.md and set this up."**
+
+It installs, checks how to reach LinkedIn, produces your first report, runs its
+own tests, and schedules a daily run. Nothing else is needed. Everything below
+is detail you can ignore unless something looks wrong.
+
+---
+
+## What it does
+
+Turns thousands of pending invitations and unread messages into one page you act
+on in two minutes.
+
+It reports:
+
+- who is genuinely worth accepting, ranked by what they are actually worth to you
+- **what you promised someone and never delivered** — these hide in threads you
+  already replied to, so nothing else surfaces them
+- deadlines people set you that have already passed
+- who is waiting on a reply, and for how long
+- press, investors, competitors and anything about money, legal, security or a
+  cancellation — held for you personally, never auto-handled
+- spam and cold sequences, collapsed so one campaign is one decision, not forty
+
+**It reports. It does not act.** Accepting, ignoring and archiving only happen
+after you approve a list that names every person on it.
+
+## Getting your data in
+
+It tries several ways and tells you which one worked. You do not choose.
+
+**The recommended way, and the only safe one for a big backlog:** LinkedIn's own
+data export. Settings → Data Privacy → Get a copy of your data → tick
+**Invitations** and **Messages**. It arrives in minutes. Then hand Claude the
+zip, or run:
 
 ```bash
-unzip linkedin-inbound-{VERSION}.zip
-cd linkedin-inbound-{VERSION}
-./install.sh
+python3 linkedin_triage.py --from-archive ~/Downloads/<the-export>.zip
 ```
 
-That checks Python, finds a way to reach LinkedIn, produces a first report, runs
-the tests, and schedules a daily 08:00 run. It prints exactly what is still
-missing rather than claiming success.
+One download, no automation against your account, no risk.
 
-Python 3.9+ is the only requirement. No pip, no npm, no accounts, no
-subscriptions, no data leaves your machine.
+**Reading the live pages** works too, but it is deliberately capped at 200
+invitations. Reading 6,000 through the browser means ~600 automated page loads
+against your signed-in session, and that is exactly the kind of activity that
+gets LinkedIn accounts restricted. The tool refuses to do it and points you at
+the export instead.
 
-## Getting your invitations in
+**Browsers:** Chrome, Edge, Brave, Arc and Chromium all work — it can start one
+itself if needed. Safari and Firefox cannot be driven this way; use the export.
 
-It tries several ways and tells you which one worked:
+## Will this get my account restricted?
 
-1. **A file you already have** — anything in `data/linkedin/`.
-2. **LinkedIn's own data export** *(easiest, nothing to install)* — Settings →
-   Data Privacy → Get a copy of your data → tick **Invitations**. It arrives in
-   minutes. Then:
-   ```bash
-   python3 linkedin_triage.py --from-archive ~/Downloads/*.zip
-   ```
-3. **Your live LinkedIn tab** — start Chrome with remote debugging on the profile
-   you are signed in with:
-   ```bash
-   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \\
-     --remote-debugging-port=9222 --profile-directory=Default
-   ```
+Reading the export: no. It is a file download that LinkedIn offers you.
 
-If none of them work it says so and tells you how to fix it. **It never invents a
-number.** An empty answer and "I could not check" are different things here.
+Acting (accept / ignore / archive): capped and paced on purpose — 25 accepts and
+100 ignores a day, spaced out. Sudden bulk action is the thing that triggers
+restrictions; steady action does not. Reporting someone as spam is never
+automatic, because it cannot be undone and it affects their account.
 
 ## Reading the report
 
-Reports land in `reports/Ernest/00-Watch/`. A `.md` you read and a `.csv` with
+Reports land in `reports/Ernest/00-Watch/` — a `.md` you read, a `.csv` with
 everyone in it.
 
 | On the report | Means |
 |---|---|
-| `[TIER-1]` | Worth your time. Matches who actually buys from you. |
-| `[HOLD]` | Press, investors, competitors, legal. **Never auto-resolved.** |
-| `[BUCKET] Worth a look` | ICP-adjacent, no decisive signal. Skim the CSV. |
-| `[BUCKET] Spam / seller pitch` | Cold vendor and mass-template invites. |
-| `source:` | Which method produced this data — a month-old export and a live read never look alike. |
+| `[ESCALATION]` | Money, legal, security, churn or safety. Answer personally. |
+| `[YOU PROMISED]` | You said you would do something and never did. |
+| `[CLOCK]` | A deadline they set. Often already passed. |
+| `[WAITING]` | They wrote last and got no answer. |
+| `[HOLD]` | Press, investors, competitors. Never auto-resolved. |
+| `[IDENTIFY]` | Real buying signal, but we cannot tell who they are. Worth 30 seconds. |
+| `[CAMPAIGN]` | One outreach blast from many accounts. One decision. |
+| `source:` | Which method produced the data — a month-old export never looks live. |
 
 ## Clearing the spam
 
 ```bash
-python3 adapters/linkedin/act.py --caps                  # what is left today
-python3 adapters/linkedin/act.py --plan --tier trash     # writes a batch file
-# open the batch, delete anyone who does not belong, then:
-python3 adapters/linkedin/act.py --execute <batch.json>
+python3 adapters/linkedin/act.py --plan --tier trash     # writes a list
+# open it, delete anyone who does not belong, then:
+python3 adapters/linkedin/act.py --execute <that-file>
 ```
 
 Nothing happens until you run `--execute`, and even then it is a dry run until
 you set `dry_run: false` and `approved: true` in `ernest.yaml`.
-
-Daily caps (25 accepts, 100 ignores) exist because sudden mass action is what
-gets LinkedIn accounts restricted — steady action does not.
-
-**Reporting someone as spam cannot be undone** and affects their account, so it
-always needs an explicit named list, every single run.
 
 ## Teaching it
 
@@ -246,33 +267,31 @@ When it gets someone wrong:
 python3 adapters/linkedin/act.py --rescue slug:their-name --actual tier-1 --why "real customer"
 ```
 
-Three corrections of the same shape and it proposes a rubric change you can
+Three corrections of the same shape and it proposes a scoring change you can
 review and undo. It never changes its own scoring silently.
 
 ## Making it yours
 
-`data/grading/linkedin-rubric.json` is the whole scoring brain, and it ships with
-sample lists. Edit them:
+`data/grading/linkedin-rubric.json` is the whole scoring brain — who counts as a
+buyer, who your competitors are, what spam looks like. Edit the lists; **never
+delete a key** (a missing key silently switches that whole check off).
 
-- `tier1.buyer_archetypes` / `verticals` — who actually buys from you. Derive
-  these from closed-won revenue, not from a targeting deck; the two disagree
-  more often than not.
-- `hold.competitor_keywords` — your competitors.
-- `spam.threshold` — raise it if real people land in the spam bucket.
-
-**Edit the lists; never delete a key.** The file replaces built-in defaults
-wholesale, so a missing key turns that whole signal family off silently.
+`docs/linkedin-spec.md` documents every list, weight and threshold, and every
+reason something gets dropped. If a report ever surprises you, the answer is
+there.
 
 ## Trust
 
-- Reports first, acts only on an approved named batch.
-- Never fabricates a population; says which source answered.
-- Blank is not zero — a field it could not see never counts as evidence.
-- Runs entirely on your machine. Standard library only.
-- `tests/` asserts all of the above; `./install.sh` runs them.
+- Reports first; acts only on a list you approved that names each person.
+- Never invents a number — it says which source answered, or that none did.
+- Blank is not zero: a field it could not see never counts as evidence.
+- Runs entirely on your machine. Python standard library only, no accounts, no
+  subscriptions, nothing installed.
+- `tests/` asserts all of the above, and `./install.sh` runs them.
 
 For agents: read `AGENTS.md`.
 ''')
+
 
 # --------------------------------------------------------------------------- #
 # Agent brief

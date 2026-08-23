@@ -3,7 +3,7 @@
 
     rung 1  cache        data/linkedin/*.csv is still fresh          -> use it
     rung 2  archive      LinkedIn's own "Get a copy of your data"    -> request + unpack
-    rung 3  live         the invitation-manager DOM                  -> read (and later act)
+    rung 3  live         the invitation-manager DOM                  -> read (CAPPED) / act
     rung 4  hubspot      the linkedin_* properties HeyReach fills    -> partial mirror
     rung 5  unavailable  say so honestly                             -> never fabricate
 
@@ -48,6 +48,17 @@ RUNGS = {1: "local-export", 2: "linkedin-archive", 3: "linkedin-live",
 
 INVITATION_MANAGER = "https://www.linkedin.com/mynetwork/invitation-manager/received/"
 DOWNLOAD_MY_DATA = "https://www.linkedin.com/mypreferences/d/download-my-data"
+
+# The live rung mounts ~10 invitations per page load, so reading a large backlog
+# means hundreds of automated page loads against a logged-in session. LinkedIn's
+# own documented restriction triggers are about volume and burstiness of exactly
+# that kind of activity — and there is no reason to take the risk, because the
+# data export returns the whole queue in one download with no page loads at all.
+#
+# So the live rung is deliberately capped. It exists for small, current reads and
+# for ACTING on approved batches, not for bulk import. Above the cap it refuses
+# and names the safe path instead of quietly grinding through 700 page loads.
+LIVE_READ_CAP = 200
 
 
 # --------------------------------------------------------------------------- #
@@ -334,6 +345,14 @@ _SCRAPE_JS = r"""
 
 
 def rung3_live(li_dir: Path, *, limit: int, prefer: str) -> Optional[List[Dict[str, str]]]:
+    if limit > LIVE_READ_CAP:
+        raise browser.BrowserUnavailable(
+            f"refusing to read {limit} invitations live — that is roughly "
+            f"{limit // 10} automated page loads against a signed-in session, and "
+            "bulk activity like that is what gets LinkedIn accounts restricted. "
+            "Use the data export instead (Settings -> Data Privacy -> Get a copy "
+            "of your data -> Invitations); it returns the whole queue in one "
+            f"download. Pass --limit {LIVE_READ_CAP} or less to read live anyway.")
     drv = browser.open_driver(prefer)
     try:
         rows: List[Dict[str, str]] = []
@@ -416,7 +435,7 @@ def rung4_hubspot(li_dir: Path, data_dir: Path) -> Optional[List[Dict[str, str]]
 # --------------------------------------------------------------------------- #
 
 def ingest(profile: Path, *, only_rung: Optional[int] = None, zip_path: Optional[Path] = None,
-           max_age_hours: float = 20.0, limit: int = 500, wait_minutes: float = 10.0,
+           max_age_hours: float = 20.0, limit: int = LIVE_READ_CAP, wait_minutes: float = 10.0,
            prefer: str = "auto", dry_run: bool = False) -> Dict[str, Any]:
     li_dir, data_dir = profile / "data" / "linkedin", profile / "data"
     attempts: List[Dict[str, str]] = []
@@ -519,7 +538,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--from-archive", dest="zip_path", help="a downloaded LinkedIn export .zip")
     ap.add_argument("--rung", type=int, choices=[1, 2, 3, 4], help="force one rung")
     ap.add_argument("--max-age-hours", type=float, default=20.0)
-    ap.add_argument("--limit", type=int, default=500, help="max invitations to read live")
+    ap.add_argument("--limit", type=int, default=LIVE_READ_CAP,
+                    help=f"max invitations to read live (cap {LIVE_READ_CAP}; "
+                         "use the data export for bulk)")
     ap.add_argument("--wait-minutes", type=float, default=10.0, help="how long to wait for the archive")
     ap.add_argument("--prefer", choices=["auto", "ego", "chrome"], default="auto")
     ap.add_argument("--doctor", action="store_true", help="what is reachable right now")
@@ -539,7 +560,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                        as_json=args.json, compact=args.compact, sink=args.deliver,
                        human=f"Noted. {path}")
 
-    defaults = {"rung": None, "max_age_hours": 20.0, "limit": 500, "wait_minutes": 10.0,
+    defaults = {"rung": None, "max_age_hours": 20.0, "limit": LIVE_READ_CAP, "wait_minutes": 10.0,
                 "prefer": "auto", "zip_path": None, "dry_run": False}
     err = cc.apply_profile(args, profile, defaults)
     if err:

@@ -27,13 +27,29 @@ import shutil
 import socket
 import struct
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 DEFAULT_CDP_PORT = 9222
 _TIMEOUT = 30.0
+
+# Anything Chromium-based speaks CDP, so all of these work. Safari and Firefox
+# do NOT — Firefox has its own protocol and Safari has no equivalent at all.
+# Rather than fail with "no browser", we say which ones would work.
+_CHROMIUM_CANDIDATES = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Arc.app/Contents/MacOS/Arc",
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+    "microsoft-edge", "brave-browser",
+)
+UNSUPPORTED_BROWSERS = ("Safari", "Firefox")
 
 
 class BrowserUnavailable(RuntimeError):
@@ -203,6 +219,51 @@ class EgoDriver(Driver):
             except ValueError:
                 continue
         return None
+
+
+def find_chromium() -> Optional[str]:
+    """A Chromium-family browser we could start ourselves."""
+    for candidate in _CHROMIUM_CANDIDATES:
+        if candidate.startswith("/"):
+            if Path(candidate).exists():
+                return candidate
+        else:
+            found = shutil.which(candidate)
+            if found:
+                return found
+    return None
+
+
+def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0) -> bool:
+    """Start a Chromium-family browser with debugging on, and wait for it.
+
+    Uses a DEDICATED profile directory, never the user's default. Chrome refuses
+    to enable remote debugging on an already-running default profile, and
+    silently attaching to someone's main browser is not a thing to do quietly.
+    The trade-off is stated plainly: a fresh profile is not signed in to
+    LinkedIn, so the user signs in once and it persists.
+    """
+    exe = find_chromium()
+    if not exe:
+        return False
+    profile = Path.home() / ".ernest-cc" / "browser-profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.Popen(
+            [exe, f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
+             "--no-first-run", "--no-default-browser-check",
+             "https://www.linkedin.com/feed/"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2):
+                return True
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.5)
+    return False
 
 
 def available_drivers(port: int = DEFAULT_CDP_PORT) -> List[str]:
