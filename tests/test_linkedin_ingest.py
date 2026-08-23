@@ -82,9 +82,11 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         profile = Path(tmp) / "p"
         (profile / "data" / "grading").mkdir(parents=True)
-        for name in ("b2b", "talent", "linkedin"):
-            src = ROOT / "data" / "grading" / f"{name}-rubric.json"
-            (profile / "data" / "grading" / f"{name}-rubric.json").write_text(
+        # Only the LinkedIn rubric is required here. Copying whichever others
+        # happen to exist keeps this runnable inside the standalone bundle,
+        # which ships the LinkedIn rubric alone.
+        for src in (ROOT / "data" / "grading").glob("*-rubric.json"):
+            (profile / "data" / "grading" / src.name).write_text(
                 src.read_text(encoding="utf-8"), encoding="utf-8")
         zip_path = profile / "export.zip"
         _archive(zip_path)
