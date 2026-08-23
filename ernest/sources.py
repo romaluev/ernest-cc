@@ -282,9 +282,13 @@ def _opt_int(value: str) -> Optional[int]:
     if not text:
         return None
     try:
-        return int(float(text))
+        n = int(float(text))
     except ValueError:
         return None
+    # Negative counts cannot happen; a negative means the export is corrupt, and
+    # "corrupt" must read as unknown rather than as an extreme value that would
+    # score someone as a thin-network spammer.
+    return n if n >= 0 else None
 
 
 # LinkedIn's own archive uses spaced Title Case headers ("Sent At", "From",
@@ -376,9 +380,18 @@ def load_invitations(cfg: Config) -> List[Invitation]:
                     )
                     # Same human, two identifier shapes (slug vs ACoAA... URN).
                     # Keying on either alone double-counts them — see identity_key.
-                    if inv.key in seen:
+                    #
+                    # But a NAME is not an identifier. Two different people can
+                    # share a display name, and deduping those together silently
+                    # deletes one of them. Only collapse rows that share a real
+                    # identifier; fall back to the whole row otherwise.
+                    key = inv.key
+                    if key.startswith("name:"):
+                        key = (f"{key}|{inv.headline}|{inv.company}|"
+                               f"{inv.sent_at}|{inv.note[:60]}")
+                    if key in seen:
                         continue
-                    seen.add(inv.key)
+                    seen.add(key)
                     out.append(inv)
         except (OSError, ValueError):
             continue
@@ -412,7 +425,14 @@ class Conversation:
     subject: str = ""
     folder: str = ""            # INBOX | ARCHIVE | SPAM (LinkedIn's own label)
     messages: List[LIMessage] = field(default_factory=list)
+    participants: List[str] = field(default_factory=list)
     source: str = "local-export"
+
+    @property
+    def is_group(self) -> bool:
+        """More than one person on the other side. Treating a group thread as a
+        one-to-one conversation attributes everything to whoever wrote first."""
+        return len({p for p in self.participants if p}) > 1
 
     @property
     def inbound(self) -> List[LIMessage]:
@@ -567,6 +587,8 @@ def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> 
                 subject=_pick_msg(row, "subject"),
                 folder=(_pick_msg(row, "folder") or "INBOX").upper(),
                 source=default_source)
+        if not outbound and other and other not in convo.participants:
+            convo.participants.append(other)
         if not convo.counterparty and other:
             convo.counterparty, convo.counterparty_url = other, other_url
         convo.messages.append(LIMessage(
@@ -575,7 +597,26 @@ def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> 
             direction="outbound" if outbound else "inbound",
             body=_pick_msg(row, "body"),
             subject=_pick_msg(row, "subject")))
-    return [c for c in convos.values() if c.inbound]
+    out: List[Conversation] = []
+    for convo in convos.values():
+        if not convo.inbound:
+            continue
+        if convo.is_group:
+            # Name everyone rather than silently picking one. The counterparty
+            # becomes whoever actually wrote the most, so value and triage still
+            # attach to the person driving the thread.
+            counts: dict = {}
+            for m in convo.inbound:
+                counts[m.sender] = counts.get(m.sender, 0) + 1
+            if counts:
+                convo.counterparty = max(counts, key=lambda k: (counts[k], k))
+            others = [p for p in convo.participants if p != convo.counterparty]
+            if others:
+                convo.subject = (convo.subject or "") + \
+                    f" [group thread with {len(convo.participants)}: " \
+                    f"{', '.join(convo.participants[:4])}]"
+        out.append(convo)
+    return out
 
 
 def identity_key_for(public_url: str = "", name: str = "") -> str:

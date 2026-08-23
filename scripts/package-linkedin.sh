@@ -58,19 +58,100 @@ Grading subset of the Ernest engine, shipped so this bundle runs on its own.
 Standard library only. Do not edit — tune `data/grading/linkedin-rubric.json`
 instead. The full product lives in the ernest-cc repo.
 EOF
-mkdir -p "$STAGE/data/grading" "$STAGE/data/linkedin"
+
+# The upstream repo is public and ships a deliberately fictional sample world
+# ("Northwind", "NovaLabs", "Sam Rivera") that its own tests bind to. None of
+# that should reach a private handover, where it just reads as a company nobody
+# recognises. Scrub the bundled COPY; the repo keeps its fixtures.
+python3 - "$STAGE" <<'PYSCRUB'
+import pathlib, re, sys
+stage = pathlib.Path(sys.argv[1])
+swaps = [
+    ('"current_company": ["northwind"],', '"current_company": ["__your-company__"],'),
+    ('"investor_terms": ["northwind investor", "invested in northwind"],',
+     '"investor_terms": ["__your-company__ investor"],'),
+    ("against the ex-NovaLabs rubric.", "against the talent rubric."),
+    ('("Sam Rivera. Role: CEO & Co-Founder, Northwind."), so keep only the',
+     '("Jane Doe. Role: CEO & Co-Founder, Acme."), so keep only the'),
+    ('"as discussed with alex", "alex suggested", "sam rivera"],',
+     '"as discussed with alex", "alex suggested"],'),
+    ('"pool": "ex-NovaLabs",', '"pool": "talent",'),
+]
+changed = []
+for path in (stage / "ernest").glob("*.py"):
+    text = original = path.read_text(encoding="utf-8")
+    for old, new in swaps:
+        text = text.replace(old, new)
+    if text != original:
+        path.write_text(text, encoding="utf-8")
+        changed.append(path.name)
+print("  scrubbed sample-world names from: " + (", ".join(changed) or "nothing"))
+PYSCRUB
+mkdir -p "$STAGE/data/grading" "$STAGE/data/linkedin" "$STAGE/data/hubspot"
 cp "$ROOT/data/grading/linkedin-rubric.json" "$STAGE/data/grading/"
-cp "$ROOT/data/linkedin/invitations.csv" "$STAGE/data/linkedin/"
-cp "$ROOT/data/linkedin/messages.csv" "$STAGE/data/linkedin/"
-mkdir -p "$STAGE/data/hubspot"
-cp "$ROOT/data/hubspot/sample-contacts.csv" "$STAGE/data/hubspot/"
-say "grading + insight engine, sample invitations, DMs and CRM facts"
+
+# The fixtures go to examples/, NOT to data/. A bundle that ships fictional
+# people produces a convincing report about people who do not exist, and the
+# only tell is that the names end in "-sample". data/ starts empty on purpose.
+mkdir -p "$STAGE/examples"
+cp "$ROOT/data/linkedin/invitations.csv" "$STAGE/examples/invitations.example.csv"
+cp "$ROOT/data/linkedin/messages.csv" "$STAGE/examples/messages.example.csv"
+cp "$ROOT/data/hubspot/sample-contacts.csv" "$STAGE/examples/contacts.example.csv"
+cat > "$STAGE/examples/README.md" <<'EOF'
+# Examples — fictional, for testing only
+
+These are invented people. They exist so `./install.sh` can prove the pipeline
+works end to end before you trust it with anything real, and so you can see the
+shape of the input files.
+
+`python3 linkedin_triage.py --demo` runs against them in a scratch directory
+without touching `data/`.
+
+**Never copy them into `data/`.** A report about fictional people that looks
+exactly like a real one is worse than no report.
+EOF
+
+cat > "$STAGE/data/linkedin/README.md" <<'EOF'
+# Put your LinkedIn export here
+
+Empty on purpose — this tool does not ship fake people.
+
+1. LinkedIn -> Settings -> Data Privacy -> **Get a copy of your data**
+2. Tick **Invitations** and **Messages** (not the whole archive; those two
+   arrive in minutes rather than up to 24 hours)
+3. When the email lands:
+
+   ```
+   python3 linkedin_triage.py --from-archive ~/Downloads/<the-file>.zip
+   ```
+
+That writes `invitations.csv` and `messages.csv` here and produces your first
+real report. Everything after that is automatic.
+
+Already have the CSVs? Drop them in as `invitations.csv` and `messages.csv`.
+The column names from LinkedIn's export are understood as-is.
+EOF
+
+cat > "$STAGE/data/hubspot/README.md" <<'EOF'
+# Optional: CRM facts
+
+Drop a contacts export here as CSV and the scoring gets much sharper, because
+facts outrank inference. Recognised columns:
+
+    email,firstname,lastname,company,tier,last_touch,open_deal,won_revenue
+
+`open_deal` (true/false) and `won_revenue` (a number) are what promote someone
+to `critical`. Without this file everything is scored from what people wrote
+about themselves, which is weaker and is reported as such.
+EOF
+say "engine + real rubric; data/ ships EMPTY (fixtures live in examples/)"
 
 # --- tests, so a recipient can verify the guarantees themselves --------------
 mkdir -p "$STAGE/tests/fixtures"
 cp "$ROOT/tests/test_linkedin_grading.py" "$ROOT/tests/test_linkedin_ingest.py" \
    "$ROOT/tests/test_linkedin_actions.py" "$ROOT/tests/test_linkedin_insight.py" \
-   "$ROOT/tests/test_linkedin_browser.py" "$STAGE/tests/"
+   "$ROOT/tests/test_linkedin_browser.py" "$ROOT/tests/test_linkedin_edges.py" \
+   "$STAGE/tests/"
 cp "$ROOT/tests/fixtures/linkedin-archive.zip" "$STAGE/tests/fixtures/" 2>/dev/null || true
 say "tests"
 
@@ -101,22 +182,63 @@ say "README (human), AGENTS.md (agent), install.sh, cron, engine shim"
 
 echo
 echo "Verifying the bundle before packaging it..."
+set +e
+find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 VERIFY_FAIL=0
-( cd "$STAGE" && python3 linkedin_triage.py --grade-only >/dev/null 2>&1 ) \
-  || { echo "  FAIL: the bundle cannot produce a report" >&2; VERIFY_FAIL=1; }
+DEMO_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --demo 2>&1 )" || {
+  echo "  FAIL: the bundle cannot produce a report" >&2
+  printf '%s\n' "$DEMO_OUT" | tail -12 >&2
+  VERIFY_FAIL=1
+}
 for want in linkedin-invitations linkedin-dms; do
-  if ls "$STAGE"/reports/Ernest/00-Watch/$want--*.md >/dev/null 2>&1; then
+  if printf '%s' "$DEMO_OUT" | grep -q "$want--"; then
     say "$want report produced"
   else
     echo "  FAIL: no $want report — that half of the bundle is dead" >&2
     VERIFY_FAIL=1
   fi
 done
+# data/ must ship EMPTY. Shipping fixtures as if they were real is the bug this
+# whole change exists to prevent, so it is checked, not assumed.
+if ls "$STAGE"/data/linkedin/*.csv >/dev/null 2>&1; then
+  echo "  FAIL: data/linkedin ships CSVs — the bundle would report on fake people" >&2
+  VERIFY_FAIL=1
+else
+  say "data/ ships empty (fixtures are in examples/)"
+fi
+# A seeded build must carry NO fictional identity. "Northwind" and friends are
+# the shipped sample world; if any of it survives into a private handover, the
+# seed did not fully apply and the report will quietly reference a company that
+# does not exist.
+# A first run with no data must explain itself and exit 3, not crash or lie.
+# `set -e` would abort here on the exit code we are deliberately asserting.
+rc=0
+( cd "$STAGE" && python3 linkedin_triage.py >/dev/null 2>&1 ) || rc=$?
+if [ "$rc" -eq 3 ]; then
+  say "a first run with no data explains itself (exit 3)"
+else
+  echo "  FAIL: first run with no data exited $rc, expected 3" >&2
+  VERIFY_FAIL=1
+fi
 for t in "$STAGE"/tests/test_*.py; do
   ( cd "$STAGE" && PYTHONPATH="$STAGE" python3 "$t" >/dev/null 2>&1 ) \
     && say "$(basename "$t" .py) passes" \
     || { echo "  FAIL: $(basename "$t")" >&2; VERIFY_FAIL=1; }
 done
+find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+if [ -n "$SEED" ]; then
+  PLACEHOLDERS="$(grep -ril -e 'northwind' -e 'novalabs' -e 'sam rivera' -e 'novaframe' \
+      "$STAGE/memory" "$STAGE/data" "$STAGE/skills" "$STAGE/ernest" "$STAGE/docs" \
+      "$STAGE/adapters" "$STAGE"/*.md 2>/dev/null || true)"
+  if [ -n "$PLACEHOLDERS" ]; then
+    echo "  FAIL: sample-world names survive the seed:" >&2
+    printf '    %s\n' $PLACEHOLDERS >&2
+    VERIFY_FAIL=1
+  else
+    say "no sample-world identity left (seed fully applied)"
+  fi
+fi
+
 # Every name the entry point calls must actually exist in the shipped engine.
 python3 - "$STAGE" <<'PYCHK' || VERIFY_FAIL=1
 import ast, pathlib, sys
@@ -142,10 +264,12 @@ if missing:
 print("  [ok] every function the engine calls is present")
 PYCHK
 rm -rf "$STAGE/reports" "$STAGE/logs" "$STAGE/data/linkedin/.ingest.json"
+find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+set -e
 if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo >&2
   echo "REFUSING to package a broken bundle. Fix the failures above." >&2
-  rm -rf "$(dirname "$STAGE")"
+  echo "Staging kept for inspection: $STAGE" >&2
   exit 1
 fi
 echo

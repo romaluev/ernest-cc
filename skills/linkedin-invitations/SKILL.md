@@ -305,7 +305,7 @@ items: 7 (population 11; hold: 3, tier-1: 2, tier-2: 4, trash: 2)
 
 ## 3. [HOLD] Sasha Vance
 - signal: Do Not Contact
-- why: Competitor: 'novaframe'
+- why: Competitor: '<a name from hold.competitor_keywords>'
 - action: Hold — do not accept unread
 
 ## 6. [BUCKET] Spam / seller pitch (2)
@@ -313,8 +313,8 @@ items: 7 (population 11; hold: 3, tier-1: 2, tier-2: 4, trash: 2)
 ```
 
 The order, live: a production studio asking about an enterprise plan scores 87
-and is proposed for Accept, while a competitor product lead with 15 mutual
-connections is held as `Do Not Contact` — **suppression and hold ran before
+and is proposed for Accept, while a product lead at a company on the competitor list, with 15
+mutual connections, is held as `Do Not Contact` — **suppression and hold ran before
 scoring, so the mutuals never got a chance to promote them.** If a competitor
 ever shows a tier instead of `hold`, the branch order changed; re-read
 `grade_linkedin_inbound` before trusting any card.

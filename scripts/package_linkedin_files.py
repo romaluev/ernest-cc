@@ -51,7 +51,40 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="LinkedIn inbound triage")
     ap.add_argument("--grade-only", action="store_true", help="skip the ingest step")
     ap.add_argument("--from-archive", help="a downloaded LinkedIn export .zip")
+    ap.add_argument("--demo", action="store_true",
+                    help="run against the fictional examples in a scratch dir")
     args = ap.parse_args()
+
+    if args.demo:
+        import shutil, tempfile
+        scratch = Path(tempfile.mkdtemp(prefix="li-demo-"))
+        for sub in ("data/grading", "data/linkedin", "data/hubspot", "memory"):
+            (scratch / sub).mkdir(parents=True, exist_ok=True)
+        for src, dst in ((HERE / "examples" / "invitations.example.csv",
+                          scratch / "data" / "linkedin" / "invitations.csv"),
+                         (HERE / "examples" / "messages.example.csv",
+                          scratch / "data" / "linkedin" / "messages.csv"),
+                         (HERE / "examples" / "contacts.example.csv",
+                          scratch / "data" / "hubspot" / "contacts.csv")):
+            if src.is_file():
+                shutil.copy(src, dst)
+        for src in (HERE / "data" / "grading").glob("*.json"):
+            shutil.copy(src, scratch / "data" / "grading" / src.name)
+        for src in (HERE / "memory").glob("*.md"):
+            shutil.copy(src, scratch / "memory" / src.name)
+        os.environ["ERNEST_PROFILE_DIR"] = str(scratch)
+        os.environ["ERNEST_LOCAL_VAULT"] = str(scratch / "reports")
+        os.environ["ERNEST_MODE"] = "local"
+        sys.path.insert(0, str(HERE))
+        from ernest import config, grade_run      # noqa: E402
+        written = grade_run.run(config.load(), b2b=False, talent=False,
+                                linkedin=True, linkedin_dms=True)
+        for path in written:
+            print(path)
+        print("")
+        print("Demo only — fictional people, written to "
+              + str(scratch) + ". Your own data/ was not touched.")
+        return 0 if written else 3
 
     os.environ.setdefault("ERNEST_PROFILE_DIR", str(HERE))
     # A seeded bundle ships memory/ceo-persona.md next to this file; the engine
@@ -60,6 +93,23 @@ def main() -> int:
     # the direction of every message in the inbox.
     os.environ.setdefault("ERNEST_LOCAL_VAULT", str(HERE / "reports"))
     os.environ.setdefault("ERNEST_MODE", "local")
+
+    have_data = any((HERE / "data" / "linkedin").glob("*.csv"))
+    if not have_data and not args.from_archive:
+        for line in [
+            "No LinkedIn data yet — and this tool does not invent any.",
+            "",
+            "Get your export (it takes a few minutes):",
+            "  1. LinkedIn -> Settings -> Data Privacy -> Get a copy of your data",
+            "  2. Tick Invitations and Messages",
+            "  3. When the email arrives:",
+            "       python3 linkedin_triage.py --from-archive ~/Downloads/<file>.zip",
+            "",
+            "Want to see what a report looks like first?",
+            "       python3 linkedin_triage.py --demo    (fictional people, scratch dir)",
+        ]:
+            print(line, file=sys.stderr)
+        return 3
 
     if not args.grade_only:
         cmd = [sys.executable, str(HERE / "adapters" / "linkedin" / "ingest.py"),
@@ -133,20 +183,27 @@ else
   gap "Start Chrome with --remote-debugging-port=9222 on the profile signed in to LinkedIn, OR download your data export (Settings -> Data Privacy -> Get a copy of your data -> tick Invitations) and run: python3 linkedin_triage.py --from-archive <zip>"
 fi
 
-if python3 "$HERE/linkedin_triage.py" --grade-only >/dev/null 2>&1; then
-  # Check BOTH halves. A bundle that silently ships only invitations looks
-  # healthy from here, and that is precisely what went out once before.
-  for want in linkedin-invitations linkedin-dms; do
-    if ls "$HERE"/reports/Ernest/00-Watch/$want--*.md >/dev/null 2>&1; then
-      step ok "$want report written"
-    else
-      step "--" "no $want report"
-      gap "That half of the bundle produced nothing. Run \\`python3 linkedin_triage.py\\` and read the error."
-    fi
-  done
+# Prove the pipeline works using the fictional examples in a scratch directory.
+# data/ ships empty on purpose, so this must never write a report into it.
+DEMO_OUT="$(python3 "$HERE/linkedin_triage.py" --demo 2>&1)"
+if printf '%s' "$DEMO_OUT" | grep -q "linkedin-invitations--"; then
+  step ok "invitations pipeline verified (on the examples)"
 else
-  step "--" "could not produce a report at all"
-  gap "Run \\`python3 linkedin_triage.py\\` and read the error."
+  step "--" "the invitations pipeline produced nothing"
+  gap "Run \\`python3 linkedin_triage.py --demo\\` and read the error."
+fi
+if printf '%s' "$DEMO_OUT" | grep -q "linkedin-dms--"; then
+  step ok "DM pipeline verified (on the examples)"
+else
+  step "--" "the DM pipeline produced nothing"
+  gap "Run \\`python3 linkedin_triage.py --demo\\` and read the error."
+fi
+
+if ls "$HERE"/data/linkedin/*.csv >/dev/null 2>&1; then
+  step ok "your LinkedIn export is loaded"
+else
+  step "--" "no LinkedIn data yet (this is expected on a fresh install)"
+  gap "Get your export: LinkedIn -> Settings -> Data Privacy -> Get a copy of your data -> tick Invitations and Messages. Then: python3 linkedin_triage.py --from-archive ~/Downloads/<file>.zip"
 fi
 
 for t in "$HERE"/tests/test_*.py; do
