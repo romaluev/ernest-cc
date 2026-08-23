@@ -1,8 +1,7 @@
-"""Deterministic HTML digest of the day's output.
+"""Deterministic pamphlet digest of the day's output.
 
-The engine's cards are already fixed-format markdown. This renders them into ONE
-clean, consistently-styled HTML page the CEO opens — same layout every time, no
-LLM variance, no third-party dependencies. Print-to-PDF from the browser.
+Cards stay fixed-format markdown. The HTML is the source; PDF is the shareable
+A4 artifact (teal rail, same type contract as Higgsfield LinkedIn research).
 """
 from __future__ import annotations
 
@@ -10,14 +9,17 @@ import html
 import re
 from datetime import date
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
 from .config import Config, ensure_dirs
+from .pdf.chrome import pamphlet_css
+from .pdf.chrome import to_pdf as html_to_pdf
 
 # Fixed reading order; anything else follows, sorted, so the page is stable.
 _PRIORITY = [
     "brief",
     "b2b-grades",
+    "linkedin-invitations",
     "talent-grades",
     "mail-audit",
     "dropped-followups",
@@ -27,39 +29,13 @@ _PRIORITY = [
 ]
 
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
-_TIER = re.compile(r"\[(TIER-1|TIER-2|TIER-3|TRASH)\]")
+_TIER = re.compile(r"\[(TIER-1|TIER-2|TIER-3|TRASH|HOLD|BUCKET)\]")
 _META = re.compile(r"^[A-Za-z][\w .\-/]*:\s")
+_HEADING = re.compile(r"^##\s+(.+?)\s*$")
 
-_CSS = """
-:root { --fg:#1c2024; --mut:#6b7280; --line:#e5e7eb; --bg:#f6f7f9; --card:#fff; }
-* { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg);
-  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-.wrap { max-width:820px; margin:0 auto; padding:32px 20px 64px; }
-header.top { margin-bottom:20px; }
-header.top h1 { font-size:22px; margin:0 0 4px; }
-header.top .sub { color:var(--mut); font-size:13px; }
-section.card { background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:18px 20px; margin:16px 0; box-shadow:0 1px 2px rgba(16,24,40,.04); }
-section.card > h2 { font-size:17px; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line); }
-section.card h3 { font-size:14px; margin:16px 0 6px; color:#111827; }
-section.card h4 { font-size:13px; margin:12px 0 4px; color:#374151; }
-ul { margin:6px 0 6px; padding-left:20px; }
-li { margin:3px 0; }
-p { margin:6px 0; }
-.meta { display:flex; flex-wrap:wrap; gap:6px 14px; margin:0 0 6px; color:var(--mut); font-size:12.5px; }
-.meta .k { color:#9ca3af; }
-.badge { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em;
-  padding:2px 8px; border-radius:999px; margin-right:6px; vertical-align:1px; }
-.t1 { background:#e6f6ec; color:#137333; }
-.t2 { background:#fef3e2; color:#9a5b00; }
-.t3 { background:#eef0f2; color:#4b5563; }
-.trash { background:#fdecec; color:#b3261e; }
-footer.foot { color:var(--mut); font-size:12px; margin-top:24px; text-align:center; }
-@media print { body{background:#fff;} section.card{box-shadow:none;} }
-"""
-
-_BADGE_CLASS = {"TIER-1": "t1", "TIER-2": "t2", "TIER-3": "t3", "TRASH": "trash"}
+_BADGE_CLASS = {"TIER-1": "t1", "TIER-2": "t2", "TIER-3": "t3", "TRASH": "trash",
+                "HOLD": "hold", "BUCKET": "bucket"}
+# Cover is one screen. Remaining cards flow in a single pack (Chrome paginates).
 
 
 def _inline(text: str) -> str:
@@ -135,10 +111,88 @@ def _ordered_files(cfg: Config, day: date) -> List[Path]:
     return sorted(found, key=rank)
 
 
+def _section_bullets(md: str, titles: Sequence[str]) -> List[str]:
+    want = {t.lower() for t in titles}
+    lines = md.splitlines()
+    grab = False
+    out: List[str] = []
+    for raw in lines:
+        stripped = raw.strip()
+        match = _HEADING.match(stripped)
+        if match:
+            if grab:
+                break
+            grab = match.group(1).lower() in want
+            continue
+        if grab and stripped.startswith("- "):
+            out.append(stripped[2:].strip())
+    return out
+
+
+def _hero_bits(files: Sequence[Path]) -> Tuple[List[str], List[str]]:
+    """Bottom line + Top 3 from today's brief (or a stable fallback)."""
+    brief = next((p for p in files if p.name.startswith("brief")), None)
+    if brief is None:
+        return ["Nothing to show for today. Run `ernest start` first."], []
+    try:
+        md = brief.read_text(encoding="utf-8")
+    except OSError:
+        return ["Nothing to show for today. Run `ernest start` first."], []
+    bottom = _section_bullets(md, ("Bottom line",))
+    top3 = _section_bullets(md, ("Top 3", "Top 3 actions"))
+    if not bottom:
+        needs = _section_bullets(md, ("Needs you today",))
+        if needs:
+            bottom = [needs[0]]
+            top3 = top3 or needs[:3]
+        else:
+            bottom = ["Open the digest."]
+    return bottom[:2], top3[:3]
+
+
+def _list_html(items: Sequence[str], ordered: bool) -> str:
+    if not items:
+        return "<p class=\"note\">—</p>"
+    tag = "ol" if ordered else "ul"
+    body = "\n".join(f"<li>{_inline(item)}</li>" for item in items)
+    return f"<{tag}>{body}</{tag}>"
+
+
+def _sheet(inner: str, page: int, total: int, day: date, *, cover: bool = False) -> str:
+    stamp = day.isoformat()
+    cls = "sheet has-rail cover" if cover else "sheet has-rail"
+    return (
+        f'<section class="{cls}">'
+        f'<div class="rail"><span>Ernest · Alex Mashrabov · {stamp}</span></div>'
+        f'<div class="inner with-rail">{inner}</div>'
+        f'<footer class="foot"><span>CEO brief · {stamp}</span>'
+        f"<span>Read-only digest</span><span>{page} / {total}</span></footer>"
+        "</section>"
+    )
+
+
+def _hero_inner(day: date, bottom: Sequence[str], top3: Sequence[str]) -> str:
+    if len(bottom) == 1:
+        bottom_body = f'<p class="lede">{_inline(bottom[0])}</p>'
+    else:
+        bottom_body = _list_html(bottom, ordered=False)
+    return (
+        '<p class="kicker">CEO brief</p>'
+        "<h1>Ernest — daily digest</h1>"
+        f'<p class="lede">{day.isoformat()} · one screen, then the rest</p>'
+        '<div class="hero">'
+        '<div class="hero-block"><h2>Bottom line</h2>'
+        f"{bottom_body}</div>"
+        '<div class="hero-block"><h2>Top 3</h2>'
+        f"{_list_html(top3, ordered=True)}</div>"
+        "</div>"
+    )
+
+
 def render_html(cfg: Config, day: Optional[date] = None) -> str:
     day = day or cfg.today
     files = _ordered_files(cfg, day)
-    cards = []
+    cards: List[str] = []
     for path in files:
         try:
             body = _md_to_html(path.read_text(encoding="utf-8"))
@@ -148,16 +202,20 @@ def render_html(cfg: Config, day: Optional[date] = None) -> str:
     if not cards:
         cards.append('<section class="card"><p>Nothing to show for today. '
                      'Run <code>ernest start</code> first.</p></section>')
+
+    bottom, top3 = _hero_bits(files)
+    inners = [_hero_inner(day, bottom, top3), "\n".join(cards)]
+    total = len(inners)
+    sheets = [
+        _sheet(inner, i, total, day, cover=(i == 1))
+        for i, inner in enumerate(inners, 1)
+    ]
+    css = pamphlet_css()
     return (
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        f"<title>Ernest digest — {day.isoformat()}</title><style>{_CSS}</style></head>"
-        "<body><div class=\"wrap\">"
-        f'<header class="top"><h1>Ernest — daily digest</h1>'
-        f'<div class="sub">{day.isoformat()} · consistent view, generated by the engine</div></header>'
-        + "\n".join(cards)
-        + '<footer class="foot">Read-only summary. Print to PDF from your browser to share.</footer>'
-        "</div></body></html>\n"
+        f"<title>Ernest digest — {day.isoformat()}</title><style>{css}</style></head>"
+        f"<body>{''.join(sheets)}</body></html>\n"
     )
 
 
@@ -180,46 +238,6 @@ def open_in_browser(path: Path) -> bool:
         return False
 
 
-_CHROME_CANDIDATES = (
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-)
-
-
 def to_pdf(html_path: Path) -> Optional[Path]:
-    """Best-effort HTML -> PDF using a tool already on the machine.
-
-    Tries wkhtmltopdf, then headless Chrome/Chromium. Returns the PDF path on
-    success, or None so the caller can fall back to "Print to PDF" from a browser.
-    No dependency is required; this is purely opportunistic.
-    """
-    import shutil
-    import subprocess
-
-    pdf_path = html_path.with_suffix(".pdf")
-
-    wk = shutil.which("wkhtmltopdf")
-    if wk:
-        try:
-            subprocess.run([wk, "-q", str(html_path), str(pdf_path)],
-                           check=True, capture_output=True, timeout=60)
-            if pdf_path.is_file():
-                return pdf_path
-        except (subprocess.SubprocessError, OSError):
-            pass
-
-    for cand in _CHROME_CANDIDATES:
-        chrome = cand if Path(cand).exists() else shutil.which(cand)
-        if not chrome:
-            continue
-        try:
-            subprocess.run(
-                [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
-                 f"--print-to-pdf={pdf_path}", html_path.as_uri()],
-                check=True, capture_output=True, timeout=60)
-            if pdf_path.is_file():
-                return pdf_path
-        except (subprocess.SubprocessError, OSError):
-            continue
-    return None
+    """HTML → dated sibling PDF via the pamphlet chrome printer."""
+    return html_to_pdf(html_path)

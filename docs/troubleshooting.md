@@ -206,7 +206,7 @@ For a shareable, identical-every-time view, render the daily digest:
 
 ```bash
 ernest render --open    # build the HTML digest and open it in a browser
-ernest render --pdf     # also export a PDF (falls back to "Print → Save as PDF")
+ernest render --pdf     # designed A4 pamphlet next to today's digest
 ```
 
 The digest is generated deterministically at `00-Daily/digest--<date>.html` in your vault. To stop the auto-digest that runs on `ernest start`, set `auto_render: off` in `memory/preferences.md`.

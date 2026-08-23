@@ -26,23 +26,38 @@ def compose(cfg: Config) -> Tuple[str, str]:
     needs_you: List[WatchItem] = sorted(items, key=_sort_key, reverse=True)
     followups = sum(1 for i in items if i.waiting_days is not None)
 
+    if needs_you:
+        need_lines = []
+        for item in needs_you:
+            wait = f"waiting {item.waiting_days}d - " if item.waiting_days is not None else ""
+            need_lines.append(
+                f"- [{item.concern_id}] {item.title} - {wait}{item.suggested_action}"
+            )
+        bottom = need_lines[0][2:]
+        top3 = [line[2:] for line in need_lines[:3]]
+    else:
+        need_lines = ["- Nothing waiting on you. Inbox is clean."]
+        bottom = "Nothing waiting on you. Inbox is clean."
+        top3 = [
+            "Inbox is clean — no follow-up is waiting.",
+            "Run `ernest draft --concern <id>` only when something needs a reply.",
+            "Watch cards in `00-Watch/` stay remind-only.",
+        ]
+
     md_lines = [
         f"# Morning brief - {cfg.today.isoformat()}",
         "",
         "source: local-export",
         f"open threads: {len(threads)} | tracked contacts: {len(contacts)} | needs you: {len(needs_you)}",
         "",
+        "## Bottom line",
+        f"- {bottom}",
+        "",
+        "## Top 3",
+        *[f"- {item}" for item in top3],
+        "",
         "## Needs you today",
-    ]
-    if needs_you:
-        for item in needs_you:
-            wait = f"waiting {item.waiting_days}d - " if item.waiting_days is not None else ""
-            md_lines.append(
-                f"- [{item.concern_id}] {item.title} - {wait}{item.suggested_action}"
-            )
-    else:
-        md_lines.append("- Nothing waiting on you. Inbox is clean.")
-    md_lines += [
+        *need_lines,
         "",
         "## Next step",
         "- Run `ernest draft --concern <id>` to prepare draft-only replies for review.",

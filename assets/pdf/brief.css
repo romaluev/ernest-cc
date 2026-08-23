@@ -1,0 +1,286 @@
+/*
+Ernest CEO brief — same visual contract as the LinkedIn research pamphlet:
+slate paper, chassis teal rail, Bricolage + Source Sans + Azeret, overflow-safe A4.
+*/
+
+@font-face {
+  font-family: "Bricolage";
+  src: url("fonts/BricolageGrotesque-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Source Sans";
+  src: url("fonts/SourceSans3-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Source Sans";
+  src: url("fonts/SourceSans3-Italic-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Azeret";
+  src: url("fonts/AzeretMono-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --paper: #d6dce3;
+  --ink: #101318;
+  --teal: #0d3835;
+  --teal-ink: #e6eeea;
+  --red: #c23024;
+  --amber: #c49a1a;
+  --steel: #3d4752;
+  --rule: #1c2329;
+  --muted: #3a434c;
+  --line: #9aa3ad;
+  --track: #c4ccd4;
+  --row-line: #b7bec6;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 210mm;
+  background: #8b929a;
+  color: var(--ink);
+  font-family: "Source Sans", "Gill Sans", sans-serif;
+  font-size: 10.8pt;
+  line-height: 1.34;
+  -webkit-font-smoothing: antialiased;
+}
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.sheet {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 210mm;
+  background: var(--paper);
+  color: var(--ink);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  page-break-after: always;
+  break-after: page;
+}
+.sheet.cover {
+  height: 297mm;
+  max-height: 297mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.sheet:last-child {
+  page-break-after: auto;
+  break-after: auto;
+}
+.inner {
+  padding: 12mm 13mm 4mm 13mm;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 210mm;
+  display: flex;
+  flex-direction: column;
+  gap: 2.4mm;
+}
+.inner.with-rail { padding-left: 20mm; }
+.inner > * { min-width: 0; max-width: 100%; }
+
+.rail {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 11mm;
+  background: var(--teal);
+  overflow: hidden;
+}
+.rail span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  white-space: nowrap;
+  max-width: 250mm;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--teal-ink);
+  font-family: "Azeret", monospace;
+  font-size: 7pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.foot {
+  position: static;
+  flex: 0 0 14mm;
+  margin: 0 13mm 0 20mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 3mm;
+  font-family: "Azeret", monospace;
+  font-size: 6.6pt;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-top: 0.6pt solid var(--rule);
+  padding-top: 2.1mm;
+}
+.foot span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot span:nth-child(2) { flex: 1 1 auto; text-align: center; }
+.foot span:first-child,
+.foot span:last-child { flex: 0 1 auto; }
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 640;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+h1 {
+  font-family: "Bricolage", sans-serif;
+  font-size: 24pt;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-variation-settings: "opsz" 72, "wdth" 100, "wght" 700;
+}
+h2 {
+  font-family: "Bricolage", sans-serif;
+  font-size: 16.5pt;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  font-variation-settings: "opsz" 36, "wdth" 100, "wght" 680;
+}
+h3 {
+  font-family: "Bricolage", sans-serif;
+  font-size: 11.5pt;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.8mm;
+}
+h4 {
+  font-family: "Bricolage", sans-serif;
+  font-size: 10pt;
+  letter-spacing: -0.01em;
+  margin: 2mm 0 1mm;
+}
+
+.kicker {
+  font-family: "Azeret", monospace;
+  font-size: 7pt;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--red);
+  font-weight: 600;
+  margin: 0;
+}
+.lede {
+  font-size: 12pt;
+  line-height: 1.3;
+  max-width: 42em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.note {
+  font-size: 8.6pt;
+  color: var(--muted);
+  line-height: 1.32;
+  margin: 0;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+  margin-top: 2mm;
+}
+.hero-block {
+  background: #cdd3da;
+  border-left: 2.2pt solid var(--teal);
+  padding: 3.2mm 4mm;
+  min-width: 0;
+}
+.hero-block h2 {
+  font-size: 11pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: "Azeret", monospace;
+  font-weight: 600;
+  color: var(--teal);
+  margin: 0 0 2mm;
+}
+.hero-block ul, .hero-block ol {
+  margin: 0;
+  padding-left: 4.5mm;
+}
+.hero-block li {
+  margin: 1.4mm 0;
+  overflow-wrap: anywhere;
+}
+.hero-block .lede {
+  font-family: "Bricolage", sans-serif;
+  font-size: 14pt;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  font-variation-settings: "opsz" 36, "wdth" 100, "wght" 640;
+}
+
+section.card {
+  background: #cdd3da;
+  border: 0.6pt solid var(--row-line);
+  padding: 3mm 3.6mm;
+  margin: 0 0 2.4mm;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+section.card > h2 {
+  font-size: 12pt;
+  margin: 0 0 2mm;
+  padding-bottom: 1.6mm;
+  border-bottom: 0.6pt solid var(--rule);
+}
+section.card h3 { margin-top: 2.4mm; }
+section.card ul { margin: 1mm 0; padding-left: 4.5mm; }
+section.card li { margin: 1mm 0; overflow-wrap: anywhere; }
+section.card p { margin: 1.2mm 0; }
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1mm 3mm;
+  margin: 0 0 1.4mm;
+  color: var(--muted);
+  font-size: 8pt;
+  font-family: "Azeret", monospace;
+}
+.meta .k { color: var(--steel); }
+
+.badge {
+  display: inline-block;
+  font-family: "Azeret", monospace;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.4mm 1.8mm;
+  margin-right: 1.4mm;
+  vertical-align: 1px;
+}
+.t1 { background: var(--teal); color: var(--teal-ink); }
+.t2 { background: var(--amber); color: var(--ink); }
+.t3 { background: var(--track); color: var(--steel); }
+.trash { background: var(--red); color: #fff; }
+.hold { background: var(--amber); color: var(--ink); }
+.bucket { background: var(--track); color: var(--steel); }
