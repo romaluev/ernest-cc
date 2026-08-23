@@ -9,14 +9,19 @@
 SHELL=/bin/zsh
 ERNEST_HOME=$HOME/.ernest-cc
 
-# Daily safe AUTO-update, 07:30 (before the brief). Fetches from GitHub,
 # validates the new commit (health gauntlet + gate self-test) in a throwaway
 # worktree, ff-merges, refreshes the install, and re-verifies — with automatic
 # rollback and a loop-stop flag on any failure. Nothing else on your machine
 # is touched; memory/custom/state are preserved.
 # Prefer a staged one-tap flow instead? Use `update check` — it only stages a
 # card, and you promote with `ernest update`.
-30 7 * * * "$ERNEST_HOME/bin/ernest" update auto >> "$ERNEST_HOME/logs/cron.log" 2>&1
+# Weekly self-maintenance, Sunday 09:00: update (validated, with automatic
+# rollback), adopt stray installs, heal, refresh connectors, turn corrections
+# into reviewable proposals, verify. Nothing is sent, applied, or decided.
+0 9 * * 0 "$ERNEST_HOME/bin/ernest" maintain >> "$ERNEST_HOME/logs/cron.log" 2>&1
+
+# Refresh the LinkedIn invitation queue (read-only) before the brief.
+45 7 * * 1-5 python3 "$ERNEST_HOME/adapters/linkedin/ingest.py" --agent --deliver "file:$ERNEST_HOME/logs/linkedin-ingest.json" >> "$ERNEST_HOME/logs/cron.log" 2>&1
 
 # Morning brief, weekdays 08:00
 0 8 * * 1-5 "$ERNEST_HOME/bin/ernest" brief >> "$ERNEST_HOME/logs/cron.log" 2>&1
@@ -24,7 +29,7 @@ ERNEST_HOME=$HOME/.ernest-cc
 # Ambient watch, weekdays 11:00 and 16:00
 0 11,16 * * 1-5 "$ERNEST_HOME/bin/ernest" watch >> "$ERNEST_HOME/logs/cron.log" 2>&1
 
-# Weekly self-improvement summary, Fridays 17:00
+# Mid-week improvement summary, Fridays 17:00 (maintain also runs it Sundays).
 0 17 * * 5 "$ERNEST_HOME/bin/ernest" learn >> "$ERNEST_HOME/logs/cron.log" 2>&1
 
 # Optional model-enriched variant (requires Claude CLI + sign-in):

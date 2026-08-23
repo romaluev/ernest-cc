@@ -112,6 +112,94 @@ def _bump_days(value: str, delta: int = 3) -> Optional[str]:
     return f"{int(match.group(1)) + delta}d"
 
 
+_LI_TIER_FIX_RE = re.compile(
+    r"(?i)\b(?P<subj>[\w&.\- ']{2,60}?)\s+(?:was|is)\s+(?:actually\s+)?"
+    r"(?P<tier>tier-?1|tier-?2|spam|not spam|a real (?:buyer|customer|lead)|press|investor|competitor)\b")
+
+# Where a correction lands in the LinkedIn rubric. tier-2 is deliberately absent:
+# "should have been tier-2" is a judgment call, not a list edit.
+_LI_TARGET_LIST = {
+    "tier-1": ["tier1", "companies"],
+    "spam": ["spam", "headline_keywords"],
+    "press": ["hold", "press_keywords"],
+    "investor": ["hold", "investor_keywords"],
+    "competitor": ["hold", "competitor_keywords"],
+}
+
+
+def _li_decisions(cfg: Config) -> List[Dict[str, object]]:
+    return _read_jsonl(cfg.logs_dir / "linkedin-decisions.jsonl")
+
+
+def _linkedin_proposals(cfg: Config, signals: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    target = cfg.data_dir / "grading" / "linkedin-rubric.json"
+    out: List[Dict[str, object]] = []
+
+    # (a) Named corrections, from `ernest feedback` or `ingest.py --feedback`.
+    groups: Dict[Tuple[str, str], List[Dict[str, object]]] = {}
+    for s in signals:
+        text = str(s.get("text", ""))
+        if "linkedin" not in text.lower() and str(s.get("source", "")) != "linkedin":
+            continue
+        m = _LI_TIER_FIX_RE.search(text)
+        if not m:
+            continue
+        subj = _clean_subject(m.group("subj"))
+        raw = m.group("tier").lower().replace(" ", "-")
+        tier = ("tier-1" if raw in ("tier-1", "tier1", "a-real-buyer", "a-real-customer",
+                                    "a-real-lead", "not-spam")
+                else "spam" if raw == "spam"
+                else raw if raw in ("press", "investor", "competitor") else "")
+        if subj and tier in _LI_TARGET_LIST:
+            groups.setdefault((subj.lower(), tier), []).append(s)
+    for (subj, tier), evid in sorted(groups.items()):
+        path = _LI_TARGET_LIST[tier]
+        out.append({
+            "key": f"rubric-linkedin-{_slug(subj)}-{tier}",
+            "kind": "rubric_add",
+            "title": f"LinkedIn: treat '{subj}' as {tier} (corrected {len(evid)}x)",
+            "evidence": [f"{e['at']}: {str(e['text'])[:110]}" for e in evid],
+            "evidence_count": len(evid),
+            "ready": len(evid) >= READY_THRESHOLD,
+            "target": str(target),
+            "diff": {"file": str(target), "op": "list_add", "path": path, "value": subj},
+            "reverse": {"file": str(target), "op": "list_remove", "path": path, "value": subj},
+        })
+
+    # (b) Systemic over-trashing: the CEO keeps rescuing people the grader called
+    #     spam. One rescue is noise; a pattern means the threshold is too low.
+    #     Raising it is the SAFE direction — under-detecting spam costs a scroll,
+    #     over-detecting it costs a customer — so only this direction is proposed.
+    decisions = _li_decisions(cfg)
+    proposed = [d for d in decisions if d.get("phase") == "proposed" and d.get("action") == "ignore"]
+    rescued = [d for d in decisions if d.get("phase") == "overridden" and d.get("action") == "ignore"]
+    if len(rescued) >= READY_THRESHOLD and proposed:
+        rate = len(rescued) / max(len(proposed), 1)
+        try:
+            current = float(json.loads(target.read_text(encoding="utf-8"))
+                            .get("spam", {}).get("threshold", 5.0))
+        except (OSError, ValueError):
+            current = 5.0
+        bumped = round(current + 1.0, 1)
+        out.append({
+            "key": "rubric-linkedin-spam-threshold",
+            "kind": "threshold_tune",
+            "title": (f"LinkedIn spam threshold {current:g} -> {bumped:g}: "
+                      f"{len(rescued)} of {len(proposed)} proposed ignores were overridden "
+                      f"({rate:.0%})"),
+            "evidence": [f"{d.get('at')}: rescued {d.get('identity_key')} "
+                         f"(signal {d.get('signal')})" for d in rescued[-6:]],
+            "evidence_count": len(rescued),
+            "ready": len(rescued) >= READY_THRESHOLD,
+            "target": str(target),
+            "diff": {"file": str(target), "op": "set", "path": ["spam", "threshold"],
+                     "value": bumped},
+            "reverse": {"file": str(target), "op": "set", "path": ["spam", "threshold"],
+                        "value": current},
+        })
+    return out
+
+
 def generate(cfg: Config) -> List[Dict[str, object]]:
     signals = _signals(cfg)
     enabled = {c.id: c for c in concerns.load(cfg) if c.enabled}
@@ -154,6 +242,15 @@ def generate(cfg: Config) -> List[Dict[str, object]]:
                      "tier-2/3 corrections are judgment calls — update memory/icp-b2b.md "
                      "or the CRM tier instead of a signal list."),
         })
+
+    # 1b. LinkedIn corrections — same machinery, different rubric.
+    #
+    # The learning signal here is the CEO's REACTION, not a score: at this volume
+    # there is no eval set, but every proposal gets kept or overridden, so
+    # override rate per tier has N = every decision. Two shapes are mined:
+    #   a named correction  -> add the token to the right signal list
+    #   a pattern of "not spam" overrides -> raise the spam threshold
+    proposals += _linkedin_proposals(cfg, signals)
 
     # 2. threshold_tune — noise complaints attributed to a concern.
     noise: Dict[str, List[Dict[str, object]]] = {}
@@ -360,6 +457,18 @@ def _apply_diff(cfg: Config, diff: Dict[str, object]) -> bool:
             lst.append(value)
         elif op == "list_remove" and value in lst:
             lst.remove(value)
+        target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return True
+    if op == "set":
+        # Scalar knob inside a rubric JSON (e.g. spam.threshold). Same
+        # snapshot/verify/rollback path as a list edit — nothing special.
+        target = Path(str(diff["file"]))
+        data = json.loads(target.read_text(encoding="utf-8"))
+        node = data
+        path = list(diff["path"])  # type: ignore[arg-type]
+        for part in path[:-1]:
+            node = node.setdefault(part, {})
+        node[path[-1]] = diff["value"]
         target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return True
     if op == "concern_param":

@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from . import concerns, connect
 from .config import Config
@@ -191,7 +193,7 @@ def _check_concerns(cfg: Config) -> List[Check]:
 def _check_grading(cfg: Config) -> List[Check]:
     from . import grading  # local import to keep import-breakage visible in engine.imports
     out: List[Check] = []
-    for kind in ("b2b", "talent"):
+    for kind in ("b2b", "talent", "linkedin"):
         path = cfg.data_dir / "grading" / f"{kind}-rubric.json"
         cid = f"grading.{kind}"
         if not path.is_file():
@@ -287,6 +289,66 @@ def _check_data(cfg: Config) -> List[Check]:
                   "Drop exports in data/mail/ (see data/README.md) or connect a mail MCP.")]
 
 
+def _check_linkedin(cfg: Config) -> List[Check]:
+    """Is the LinkedIn queue readable, and by which rung?
+
+    Reports the RUNG, not just presence. A month-old archive snapshot and a live
+    read both produce a file; only one of them is current, and a report that
+    cannot tell them apart is worse than no report.
+    """
+    out: List[Check] = []
+    li = cfg.data_dir / "linkedin"
+    csvs = sorted(li.glob("*.csv")) if li.is_dir() else []
+    if not csvs:
+        out.append(Check("data.linkedin", "data", OFF,
+                         "data/linkedin is empty — no invitations to triage",
+                         "Run `python3 adapters/linkedin/ingest.py` (walks the fallback ladder), "
+                         "or pass a downloaded export with --from-archive."))
+    else:
+        state: Dict[str, Any] = {}
+        try:
+            state = json.loads((li / ".ingest.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        source = state.get("source", "unknown (dropped in by hand)")
+        age_h = (time.time() - max(p.stat().st_mtime for p in csvs)) / 3600.0
+        if source == "hubspot-mirror":
+            out.append(Check("data.linkedin", "data", UNVERIFIED,
+                             f"queue came from the HubSpot mirror ({state.get('rows', '?')} rows, "
+                             f"{age_h:.0f}h old) — that is a SUBSET, not the real queue size",
+                             "Re-run ingest on rung 2 or 3 for the full population."))
+        elif age_h > 24 * 14:
+            out.append(Check("data.linkedin", "data", UNVERIFIED,
+                             f"queue is {age_h / 24:.0f} days old (source: {source}) — people "
+                             "withdraw and re-send, so counts have drifted",
+                             "Re-run `python3 adapters/linkedin/ingest.py`."))
+        else:
+            out.append(Check("data.linkedin", "data", WORKING,
+                             f"{state.get('rows', len(csvs))} invitation(s), source {source}, "
+                             f"{age_h:.0f}h old", "—"))
+
+    # Which rungs could run right now. Import failure is a real answer, not a crash.
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "adapters" / "linkedin"))
+        import browser as _br  # type: ignore
+        drivers = _br.available_drivers()
+    except Exception as exc:  # noqa: BLE001
+        out.append(Check("linkedin.ingest", "linkedin", UNVERIFIED,
+                         f"cannot load the ingest adapter ({exc})",
+                         "Check adapters/linkedin/browser.py is present and importable."))
+        return out
+    if drivers:
+        out.append(Check("linkedin.ingest", "linkedin", WORKING,
+                         f"live rungs available via {', '.join(drivers)}", "—"))
+    else:
+        out.append(Check("linkedin.ingest", "linkedin", OFF,
+                         "no browser reachable — rungs 2 and 3 are unavailable, only a "
+                         "hand-downloaded archive or the HubSpot mirror will work",
+                         "Install ego-browser, or start Chrome with --remote-debugging-port=9222 "
+                         "on the profile that is signed in to LinkedIn."))
+    return out
+
+
 def _check_gate(cfg: Config) -> List[Check]:
     try:
         import contextlib
@@ -347,7 +409,8 @@ def run_checks(cfg: Config) -> List[Check]:
     """The full audit. Deterministic, read-only except last-good snapshots."""
     checks: List[Check] = []
     for fn in (_check_engine_imports, _check_memory, _check_concerns, _check_grading,
-               _check_vault, _check_connectors, _check_data, _check_gate, _check_onboarded,
+               _check_vault, _check_connectors, _check_data, _check_linkedin,
+               _check_gate, _check_onboarded,
                _check_update_channel):
         try:
             checks.extend(fn(cfg))
@@ -418,6 +481,8 @@ _FIXERS: Dict[str, Callable[[Config], bool]] = {
         cfg, cfg.data_dir / "grading" / "b2b-rubric.json", _grading_defaults_writer("b2b")),
     "grading.talent": lambda cfg: _restore_from_snapshot(
         cfg, cfg.data_dir / "grading" / "talent-rubric.json", _grading_defaults_writer("talent")),
+    "grading.linkedin": lambda cfg: _restore_from_snapshot(
+        cfg, cfg.data_dir / "grading" / "linkedin-rubric.json", _grading_defaults_writer("linkedin")),
 }
 
 _RECHECKS: Dict[str, Callable[[Config], List[Check]]] = {
@@ -425,6 +490,7 @@ _RECHECKS: Dict[str, Callable[[Config], List[Check]]] = {
     "concerns.parse": _check_concerns,
     "grading.b2b": _check_grading,
     "grading.talent": _check_grading,
+    "grading.linkedin": _check_grading,
 }
 
 
@@ -433,6 +499,7 @@ def _backup_broken(cfg: Config, check_id: str) -> Optional[str]:
     targets = {
         "concerns.parse": cfg.concerns_file,
         "grading.b2b": cfg.data_dir / "grading" / "b2b-rubric.json",
+        "grading.linkedin": cfg.data_dir / "grading" / "linkedin-rubric.json",
         "grading.talent": cfg.data_dir / "grading" / "talent-rubric.json",
     }
     src = targets.get(check_id)

@@ -13,7 +13,9 @@
     ernest learn [--apply K|--rollback ID]  evidence-ranked improvement report; reversible applies
     ernest audit [--window 365d]       deep owed-reply sweep (chunked manifest)
     ernest read [--owed] [--thread ID] cache full thread bodies to vault
-    ernest grade [--b2b] [--talent]    tier inbound leads + talent (ICP rubrics)
+    ernest maintain                   weekly: update, adopt, heal, refresh, learn, verify
+    ernest grade [--b2b] [--talent] [--linkedin]
+                                      tier inbound leads, talent, LinkedIn invites
     ernest render [--open] [--pdf]      clean, consistent digest of today (read more)
     ernest feedback "..."             record what to change about answers/work
     ernest prefs                       show current engine preferences
@@ -31,7 +33,7 @@ from pathlib import Path
 
 from . import __version__, config
 from . import (automations, audit, brief, concerns, connect, draft, feedback,
-               grade_run, health, improve, learn, onboard, preferences,
+               grade_run, health, improve, learn, linkedin, onboard, preferences,
                read_threads, render, selftest as selftest_mod, telemetry, watch)
 
 
@@ -219,6 +221,114 @@ def cmd_concern_toggle(cfg: config.Config, args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_maintain(cfg: config.Config, args: argparse.Namespace) -> int:
+    """Weekly self-maintenance: update, adopt, heal, refresh, learn, verify.
+
+    One command so the whole self-* story runs on a schedule instead of relying
+    on someone remembering six of them:
+
+        update   pull -> validate in a throwaway worktree -> ff-merge -> refresh
+                 -> post-verify, with automatic rollback on any failure
+        adopt    pull in anything left behind by an earlier install
+        heal     repair the safe class of broken checks, each re-verified
+        refresh  re-walk the connector ingest ladders
+        learn    turn accumulated corrections into REVIEWABLE proposals
+        verify   doctor, and report what a human still has to decide
+
+    Nothing here sends, posts, or acts on anyone's behalf, and nothing applies a
+    learning proposal — `sync.yaml` pins max_auto_changes_per_run: 0. This job is
+    allowed to fix ITSELF; it is not allowed to decide anything on the CEO's behalf.
+    """
+    import subprocess
+    steps: list = []   # (state, what, detail)
+
+    def run(label: str, fn) -> None:
+        try:
+            ok, detail = fn()
+        except Exception as exc:  # noqa: BLE001 — one bad step must not end the run
+            ok, detail = False, str(exc)[:160]
+        steps.append(("ok" if ok else "--", label, detail))
+
+    # 1. Code update. self-update.sh owns validation and rollback.
+    def _update():
+        script = cfg.profile_dir / "scripts" / "self-update.sh"
+        if not script.is_file():
+            script = Path(__file__).resolve().parents[1] / "scripts" / "self-update.sh"
+        if not script.is_file():
+            return False, "no updater on this surface (plugin installs update via the plugin browser)"
+        proc = subprocess.run(["bash", str(script), "auto"], capture_output=True,
+                              text=True, timeout=900)
+        tail = [ln for ln in (proc.stdout + "\n" + proc.stderr).splitlines() if ln.strip()]
+        detail = tail[-1].strip() if tail else f"updater exited {proc.returncode} with no output"
+        # A rolled-back update leaves a stop-flag on purpose: it must not retry
+        # into the same failure every week without a human looking.
+        if (cfg.logs_dir / "update-rolledback.flag").is_file():
+            detail += " — a previous update was rolled back; clear the flag after reviewing"
+        return proc.returncode == 0, detail
+
+    # 2. Adopt anything an earlier install left behind.
+    def _adopt():
+        script = Path(__file__).resolve().parents[1] / "scripts" / "migrate.py"
+        if not script.is_file():
+            return True, "no migrator on this surface"
+        proc = subprocess.run([sys.executable, str(script), "--target", str(cfg.profile_dir),
+                               "--json"], capture_output=True, text=True, timeout=180)
+        try:
+            data = json.loads(proc.stdout)
+        except ValueError:
+            return proc.returncode == 0, "nothing to adopt"
+        n = sum(a.get("count", 0) for a in data.get("adopted") or [])
+        return True, (f"adopted {n} item(s) from {data.get('source')}" if n else "nothing new")
+
+    # 3. Self-heal the safe class only.
+    def _heal():
+        records = health.heal(cfg)
+        fixed = [r for r in records if r.get("fixed")]
+        left = [r for r in records if not r.get("fixed")]
+        if not records:
+            return True, "nothing to heal"
+        return not left, (f"fixed {len(fixed)}"
+                          + (f", {len(left)} still need a human" if left else ""))
+
+    # 4. Re-walk the connector ladders so the queue is not a month old.
+    def _refresh():
+        status = linkedin.refresh_if_stale(cfg, force=True)
+        if not status.get("ran"):
+            return True, status.get("why", "")
+        return bool(status.get("ok")), (linkedin.summary_line(status) or "")
+
+    # 5. Corrections -> proposals. Never applied here.
+    def _learn():
+        props = improve.generate(cfg)
+        ready = [p for p in props if p.get("ready")]
+        return True, (f"{len(ready)} proposal(s) ready for review, {len(props)} collecting"
+                      if props else "no corrections to learn from")
+
+    run("update", _update)
+    run("adopt", _adopt)
+    run("heal", _heal)
+    run("refresh connectors", _refresh)
+    run("learn", _learn)
+
+    broken = [c for c in health.run_checks(cfg) if c.state == "BROKEN"]
+    steps.append(("ok" if not broken else "--", "verify",
+                  f"{len(broken)} broken check(s)" if broken else "doctor: 0 broken"))
+
+    if getattr(args, "json", False):
+        print(json.dumps({"steps": [{"ok": s[0] == "ok", "what": s[1], "detail": s[2]}
+                                    for s in steps]}, indent=2))
+        return 1 if broken else 0
+
+    print("Ernest weekly maintenance")
+    for state, what, detail in steps:
+        print(f"  [{state}] {what}" + (f" — {detail}" if detail else ""))
+    if broken:
+        print("\nSome checks still need a human: `ernest doctor` for the remedies.")
+    else:
+        print("\nHealthy. Nothing was sent, applied, or decided on your behalf.")
+    return 1 if broken else 0
+
+
 def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
     """Install the daily morning brief + update check so Ernest runs on its own."""
     import sys
@@ -236,14 +346,32 @@ def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
     la.mkdir(parents=True, exist_ok=True)
     jobs = [
         ("com.notiky.ernest.brief", f'"{bin_path}" start', 8, 0),
-        # Full auto-update: fetch -> validate in a throwaway worktree -> ff-merge
-        # -> refresh -> post-verify, with automatic rollback and a loop-stop flag
-        # on failure (scripts/self-update.sh). Staged one-tap mode is available
-        # by editing this job to `update check`.
-        ("com.notiky.ernest.update", f'"{bin_path}" update auto', 7, 30),
+        # Weekly self-maintenance, Sunday morning: pull + validate + ff-merge +
+        # refresh + post-verify (with automatic rollback and a loop-stop flag on
+        # failure), then adopt stray installs, heal the safe class, re-walk the
+        # connector ladders, and turn corrections into reviewable proposals.
+        # Nothing in it sends, applies, or decides anything.
+        # launchd Weekday: 0 = Sunday (7 also works); 1 would be Monday.
+        ("com.notiky.ernest.maintain", f'"{bin_path}" maintain', 9, 0, 0),
+        # Refresh the LinkedIn queue between the update and the brief. Read-only:
+        # it walks the fallback ladder and writes data/linkedin/. It never
+        # accepts, ignores, or reports anyone — that needs an approved batch.
+        ("com.notiky.ernest.linkedin",
+         f'python3 "{cfg.profile_dir}/adapters/linkedin/ingest.py" --agent '
+         f'--deliver "file:{logs}/linkedin-ingest.json"', 7, 45),
     ]
     remove = getattr(args, "remove", False)
-    for label, cmdline, hour, minute in jobs:
+    # Drop the pre-weekly daily updater if it is still installed from an older
+    # version, so the two do not both try to update.
+    for old in ("com.notiky.ernest.update",):
+        old_plist = la / f"{old}.plist"
+        if old_plist.exists():
+            subprocess.run(["launchctl", "unload", str(old_plist)], capture_output=True)
+            try:
+                old_plist.unlink()
+            except FileNotFoundError:
+                pass
+    for label, cmdline, hour, minute, *weekday in jobs:
         plist = la / f"{label}.plist"
         subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
         if remove:
@@ -261,7 +389,9 @@ def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
             '  <key>ProgramArguments</key>\n'
             f'  <array><string>/bin/zsh</string><string>-lc</string><string>{cmdline}</string></array>\n'
             f'  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>{hour}</integer>'
-            f'<key>Minute</key><integer>{minute}</integer></dict>\n'
+            f'<key>Minute</key><integer>{minute}</integer>'
+            + (f'<key>Weekday</key><integer>{weekday[0]}</integer>' if weekday else '')
+            + '</dict>\n'
             f'  <key>StandardOutPath</key><string>{logs}/launchd.log</string>\n'
             f'  <key>StandardErrorPath</key><string>{logs}/launchd.err</string>\n'
             '</dict></plist>\n', encoding="utf-8")
@@ -269,8 +399,9 @@ def cmd_schedule(cfg: config.Config, args: argparse.Namespace) -> int:
     if remove:
         print("Removed Ernest's morning schedule.")
     else:
-        print("Done — morning brief at 8:00, and a validated auto-update at 7:30, every day.")
-        print("Updates are checked, applied, and verified automatically — and rolled back on any failure.")
+        print("Done — daily: brief at 8:00, read-only connector refresh at 7:45.")
+        print("        weekly: full self-maintenance Sunday 9:00 (update, adopt, heal, refresh, learn, verify).")
+        print("Updates are validated before they land and rolled back automatically on any failure.")
         print("Nothing is sent; it only prepares what needs you. Remove anytime with `ernest schedule --remove`.")
     return 0
 
@@ -295,6 +426,9 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
         pass
     cards = watch.run(cfg)
     _log_watch_telemetry(cfg, cards)
+    # Self-heal a stale LinkedIn queue before grading it, when opted in. A failure
+    # here is never fatal: the card keeps its honest `source:` label either way.
+    li_status = linkedin.refresh_if_stale(cfg)
     grade_run.run(cfg)
     path, summary = brief.run(cfg)
     telemetry.log(cfg, "start", cards=len(cards))
@@ -305,6 +439,9 @@ def cmd_start(cfg: config.Config, _args: argparse.Namespace) -> int:
     if cst.level == "error":
         print(f"⚠ Watch reminders are OFF — {cst.message}")
         print("  (So 'nothing needs you' below may be wrong.) Ask Ernest to fix your standing concerns.")
+    li_line = linkedin.summary_line(li_status)
+    if li_line:
+        print(li_line)
     print(summary)
     if cards:
         print(f"{len(cards)} thing(s) need attention. Details: {cfg.watch_dir}")
@@ -442,10 +579,11 @@ def cmd_prefs(cfg: config.Config, args: argparse.Namespace) -> int:
 
 
 def cmd_grade(cfg: config.Config, args: argparse.Namespace) -> int:
-    both = not args.b2b and not args.talent
-    paths = grade_run.run(cfg, b2b=args.b2b or both, talent=args.talent or both)
+    all_ = not args.b2b and not args.talent and not args.linkedin
+    paths = grade_run.run(cfg, b2b=args.b2b or all_, talent=args.talent or all_,
+                          linkedin=args.linkedin or all_)
     if not paths:
-        print("Grade: no leads or talent rows to grade. Add data/mail or sourcing rows.")
+        print("Grade: nothing to grade. Add data/mail, data/sourcing, or data/linkedin rows.")
         return 0
     print(f"Grade: wrote {len(paths)} tier card(s), sorted Tier-1 first.")
     for path in paths:
@@ -614,11 +752,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_gr = sub.add_parser("grade", help="tier inbound leads + talent against ICP rubrics")
     p_gr.add_argument("--b2b", action="store_true", help="grade B2B leads only")
     p_gr.add_argument("--talent", action="store_true", help="grade talent only")
+    p_mt = sub.add_parser("maintain",
+                          help="weekly self-maintenance: update, adopt, heal, refresh, learn, verify")
+    p_mt.add_argument("--json", action="store_true")
+    p_mt.set_defaults(func=cmd_maintain)
+    p_gr.add_argument("--linkedin", action="store_true",
+                      help="grade LinkedIn inbound invitations only")
     p_gr.set_defaults(func=cmd_grade)
 
     p_re = sub.add_parser("render", help="clean, consistent HTML digest of today")
     p_re.add_argument("--open", action="store_true", help="open the digest in a browser")
-    p_re.add_argument("--pdf", action="store_true", help="also export a PDF (best-effort)")
+    p_re.add_argument("--pdf", action="store_true", help="also export a designed A4 pamphlet")
     p_re.set_defaults(func=cmd_render)
 
     p_fb = sub.add_parser("feedback", help="tell Ernest what to change about its answers/work")
