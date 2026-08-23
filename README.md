@@ -4,6 +4,10 @@ Draft-first CEO operating clone for Claude Code/Cowork. Local-first: works with
 no VPS, no Composio, and no connectors out of the box. Watches what needs you,
 drafts only when you ask, never sends on its own.
 
+> **Setting this up as an agent?** Read [AGENTS.md](AGENTS.md) first, then run
+> `./scripts/bootstrap.sh`. It installs, schedules, seeds, and verifies in one
+> pass, and tells you exactly what is still missing.
+
 ## Get started
 
 **In Claude (no terminal) — recommended:** open the plugin browser (**+** / `/`),
