@@ -283,4 +283,5 @@ section.card p { margin: 1.2mm 0; }
 .t3 { background: var(--track); color: var(--steel); }
 .trash { background: var(--red); color: #fff; }
 .hold { background: var(--amber); color: var(--ink); }
+.escalation { background: var(--red); color: #fff; }
 .bucket { background: var(--track); color: var(--steel); }

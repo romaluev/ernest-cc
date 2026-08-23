@@ -399,7 +399,23 @@
     "low_connection_threshold": 50,
     "no_mutual_and_vendor_headline": true,
     "threshold": 5.0,
-    "_threshold_comment": "Points of independent structural evidence needed before an invitation is proposed for Ignore. RAISE it when real people are landing in the spam bucket; lower it only with evidence. `ernest learn` proposes changes here from override rate."
+    "_threshold_comment": "Points of independent structural evidence needed before an invitation is proposed for Ignore. RAISE it when real people are landing in the spam bucket; lower it only with evidence. `ernest learn` proposes changes here from override rate.",
+    "_dm_blast_comment": "Sequencer filler that shows up in cold DM follow-ups. Weak on its own — plenty of real people write 'quick question'. Only ever scored on a thread we have NEVER answered.",
+    "dm_blast_keywords": [
+      "quick question",
+      "circling back",
+      "following up on my last",
+      "did you get a chance",
+      "bumping this",
+      "just checking in",
+      "saw you viewed",
+      "thought this might interest you",
+      "15 minutes next week",
+      "worth a chat",
+      "let me know if you'd like",
+      "i'll keep it short",
+      "not sure if you saw"
+    ]
   },
   "signal_map": {
     "_comment": "tier/route -> HubSpot linkedin_message_signal value. Anything unmapped emits None.",
@@ -410,5 +426,75 @@
     "vendor": "Seller Pitch",
     "job_seeker": "JOB_SEEKER",
     "suppressed": "Do Not Contact"
+  },
+  "escalation": {
+    "_comment": "The dozen things automation must never answer alone. Checked BEFORE everything, including our own prior replies: a refund dispute or a security report from a long-standing contact is MORE urgent than one from a stranger, not less. Match MEANING, not just these literals — 'charged me twice' must not slip past a 'refund' rule.",
+    "money_keywords": [
+      "refund",
+      "double charged",
+      "charged me twice",
+      "charged twice",
+      "billing dispute",
+      "chargeback",
+      "invoice is wrong",
+      "overcharged",
+      "wire transfer",
+      "payment failed",
+      "unpaid",
+      "owe us",
+      "past due"
+    ],
+    "legal_keywords": [
+      "cease and desist",
+      "our lawyers",
+      "legal action",
+      "breach of contract",
+      "dpa",
+      "data processing agreement",
+      "gdpr request",
+      "subpoena",
+      "terms of service violation",
+      "trademark",
+      "copyright claim",
+      "nda",
+      "regulator",
+      "compliance inquiry"
+    ],
+    "security_keywords": [
+      "security incident",
+      "data breach",
+      "leaked",
+      "vulnerability",
+      "exposed credentials",
+      "account was hacked",
+      "phishing",
+      "unauthorized access",
+      "sso is broken",
+      "delete my data",
+      "right to be forgotten"
+    ],
+    "churn_keywords": [
+      "cancel our",
+      "cancel my subscription",
+      "want to churn",
+      "not renewing",
+      "switching to",
+      "downgrade",
+      "disappointed",
+      "this is unacceptable",
+      "last chance",
+      "escalate this"
+    ],
+    "safety_keywords": [
+      "harassment",
+      "abuse",
+      "threat",
+      "deepfake of",
+      "impersonating",
+      "non-consensual",
+      "csam",
+      "self harm",
+      "defamation"
+    ]
   }
 }

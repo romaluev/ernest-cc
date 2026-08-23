@@ -79,6 +79,13 @@ obvious spam from people I just can't place, and hold anything from press, inves
 or competitors for me. Just the report — don't accept or ignore anything yet.
 ```
 
+**What did I promise anyone?** — skill `linkedin-inbox` → card `linkedin-dms`
+```text
+Go through my LinkedIn DMs. Show me anything I promised and never delivered,
+anything with a deadline that has passed, and who is genuinely waiting on me.
+Rank by how much the person is actually worth to us. Just the report.
+```
+
 **Then act, in batches** — skill `linkedin-invitations` (L2, capped, reversible only)
 ```text
 Remove the spam. Show me the exact list you'd ignore first, in batches, and stop

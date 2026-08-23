@@ -88,6 +88,31 @@ a sibling study. If a count cannot be parsed, emit **blank, not zero** — the
 grader distinguishes "we did not look" from "we looked and found none", and the
 whole spam score depends on that distinction.
 
+## Messaging surface
+
+Conversation rows are `li.msg-conversation-listitem` (class names are hashed and
+change, so `li[class*="conversation"]` is kept as a fallback). The counterparty
+name is the only stable handle on a row — there is no per-thread aria-label
+equivalent to the invitation controls.
+
+Archive and Delete live behind the row's overflow menu, not on the row itself:
+
+```js
+const menu = li.querySelector('button[aria-label*="ptions" i], button[class*="overflow"]');
+menu.click();                       // then click the menu item by its text
+```
+
+Match the menu item on exact text ("Archive" / "Delete"), not position — the menu
+contents differ between connected and non-connected threads.
+
+Folders are query params on `/messaging/`: unread, InMail, starred, archived, and
+spam. LinkedIn's own **Focused / Other** split is separate from all of them and
+is not a reliable signal of whether something matters.
+
+**Archive is reversible** (LinkedIn keeps the thread and it returns on a new
+message). **Delete is not**, and neither is reporting — both stay behind an
+explicit named list.
+
 ## Rate and safety
 
 - Accepting: keep batches small and paced. A published accepter tool caps itself

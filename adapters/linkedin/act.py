@@ -41,13 +41,17 @@ import browser  # noqa: E402
 import cli_common as cc  # noqa: E402
 
 INVITATION_MANAGER = "https://www.linkedin.com/mynetwork/invitation-manager/received/"
-ACTIONS = ("accept", "ignore", "report_spam")
+MESSAGING = "https://www.linkedin.com/messaging/"
+# Invitation actions and DM actions share one batch/execute path. Reversibility
+# is what separates them, not which surface they run on.
+ACTIONS = ("accept", "ignore", "report_spam", "archive", "delete")
 
 _DEFAULT_POLICY: Dict[str, Any] = {
     "dry_run": True,
     "approved": False,
-    "caps_per_day": {"accept": 25, "ignore": 100, "report_spam": 25},
-    "never_auto": ["report_spam", "reply", "inmail"],
+    "caps_per_day": {"accept": 25, "ignore": 100, "report_spam": 25,
+                     "archive": 200, "delete": 25},
+    "never_auto": ["report_spam", "delete", "reply", "inmail"],
     "min_action_interval_seconds": 20,
     "audit_log": "logs/linkedin-actions.log",
     "decision_journal": "logs/linkedin-decisions.jsonl",
@@ -157,27 +161,36 @@ def _journal(profile: Path, policy: Dict[str, Any], record: Dict[str, Any]) -> N
 # --------------------------------------------------------------------------- #
 
 _TIER_TO_ACTION = {"trash": "ignore", "tier-1": "accept"}
+# DM buckets. Archiving is reversible (LinkedIn keeps the thread); deleting is
+# not, so it sits under never_auto alongside reporting.
+_BUCKET_TO_ACTION = {"trash": "archive", "fyi": "archive"}
 
 
 def plan(profile: Path, csv_path: Path, *, tier: str, action: Optional[str],
-         limit: Optional[int], policy: Dict[str, Any]) -> Dict[str, Any]:
+         limit: Optional[int], policy: Dict[str, Any], dms: bool = False) -> Dict[str, Any]:
     if not csv_path.is_file():
         raise FileNotFoundError(f"No graded CSV at {csv_path}. Run `ernest grade --linkedin` first.")
-    act = action or _TIER_TO_ACTION.get(tier)
+    act = action or (_BUCKET_TO_ACTION if dms else _TIER_TO_ACTION).get(tier)
     if act not in ACTIONS:
         raise ValueError(f"No default action for tier {tier!r}; pass --action {'|'.join(ACTIONS)}")
     cap_left = remaining(profile, policy, act)
     want = min(limit or cap_left, cap_left)
 
+    key = "bucket" if dms else "tier"
     rows: List[Dict[str, str]] = []
     with csv_path.open(encoding="utf-8-sig", newline="") as fh:
         for row in csv.DictReader(fh):
-            if row.get("tier") != tier:
+            if row.get(key) != tier:
                 continue
-            # Belt and braces: `hold` must never reach a batch even if a caller
-            # asks for it by name, and the grader's own action wins over the tier
-            # default when it disagrees.
-            if row.get("tier") == "hold" or row.get("action", "").startswith("Hold"):
+            # Belt and braces. `hold` and `escalation` must never reach a batch
+            # even if a caller asks for them by name, and a thread still owed a
+            # reply is never archived in bulk — those are the two ways this could
+            # quietly bury something that mattered.
+            if row.get(key) in ("hold", "escalation"):
+                continue
+            if row.get("action", "").startswith("Hold") or row.get("action", "").startswith("Answer"):
+                continue
+            if dms and row.get("owed") == "yes" and row.get(key) != "trash":
                 continue
             rows.append(row)
     rows.sort(key=lambda r: -float(r.get("score") or 0))
@@ -192,13 +205,16 @@ def plan(profile: Path, csv_path: Path, *, tier: str, action: Optional[str],
         "requires_named_approval": act in policy.get("never_auto", []),
         "count": len(selected),
         "not_included": len(skipped),
-        "items": [{"identity_key": r.get("identity_key", ""), "name": r.get("name", ""),
-                   "public_url": r.get("public_url", ""), "tier": r.get("tier", ""),
-                   "signal": r.get("signal", ""), "score": r.get("score", ""),
-                   "why": r.get("why", "")} for r in selected],
+        "surface": "dms" if dms else "invitations",
+        "items": [{"identity_key": r.get("identity_key") or r.get("conversation_id", ""),
+                   "name": r.get("name") or r.get("counterparty", ""),
+                   "public_url": r.get("public_url", ""),
+                   "tier": r.get(key, ""), "signal": r.get("signal", ""),
+                   "score": r.get("score", ""), "why": r.get("why", "")} for r in selected],
     }
     for item in batch["items"]:
         _journal(profile, policy, {"phase": "proposed", "action": act,
+                                   "surface": batch["surface"],
                                    "identity_key": item["identity_key"],
                                    "tier": item["tier"], "signal": item["signal"]})
     return batch
@@ -233,7 +249,47 @@ _FIND_JS = r"""
 """
 
 
+_FIND_DM_JS = r"""
+(() => {
+  // Conversation rows carry the counterparty name in the list item; the
+  // overflow menu is what exposes Archive/Delete. Names are the only stable
+  // handle — LinkedIn's class names are hashed and change without notice.
+  const rows = [];
+  for (const li of document.querySelectorAll('li.msg-conversation-listitem, li[class*="conversation"]')) {
+    const nameEl = li.querySelector('h3, [class*="participant-names"], [class*="conversation-card__title"]');
+    const name = (nameEl ? nameEl.innerText : '').replace(/\s+/g, ' ').trim();
+    if (name) rows.push({name: name, verb: 'archive', tag: 'LI'});
+  }
+  return rows;
+})()
+"""
+
+
+def _click_dm_js(verb: str, name: str) -> str:
+    """Open a thread's overflow menu and click Archive (or Delete)."""
+    label = "Archive" if verb == "archive" else "Delete"
+    return r"""
+(() => {
+  const want = %s, label = %s;
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  const li = Array.from(document.querySelectorAll('li.msg-conversation-listitem, li[class*="conversation"]'))
+    .find(el => norm(el.innerText).includes(want));
+  if (!li) return {ok:false, why:'thread not on this page'};
+  const menu = li.querySelector('button[aria-label*="ptions" i], button[class*="overflow"]');
+  if (!menu) return {ok:false, why:'no overflow menu on the row'};
+  menu.click();
+  const item = Array.from(document.querySelectorAll('div[role=menu] button, ul[role=menu] button, button'))
+    .find(b => norm(b.innerText).toLowerCase() === label.toLowerCase());
+  if (!item) return {ok:false, why:'menu opened but no ' + label + ' item'};
+  item.click();
+  return {ok:true};
+})()
+""" % (json.dumps(name), json.dumps(label))
+
+
 def _click_js(verb: str, name: str) -> str:
+    if verb in ("archive", "delete"):
+        return _click_dm_js(verb, name)
     pattern = ("^Accept " if verb == "accept" else "^Ignore an invitation to connect from ")
     return """
 (() => {
@@ -267,14 +323,15 @@ def execute(profile: Path, batch: Dict[str, Any], *, policy: Dict[str, Any],
         return {"executed": 0, "would_execute": min(len(batch["items"]), cap_left),
                 "cap_remaining": cap_left, "dry_run": True, "refused": refused}
 
+    surface_url = MESSAGING if action in ("archive", "delete") else INVITATION_MANAGER
     drv = browser.open_driver(prefer)
     try:
         by_name = {i["name"]: i for i in batch["items"] if i.get("name")}
         stalled = 0
         while by_name and len(done) < cap_left and stalled < 3:
-            drv.goto(INVITATION_MANAGER)
+            drv.goto(surface_url)
             time.sleep(3)
-            present = drv.evaluate(_FIND_JS) or []
+            present = drv.evaluate(_FIND_DM_JS if action in ("archive", "delete") else _FIND_JS) or []
             hit = False
             for row in present:
                 name = row.get("name", "")
@@ -316,7 +373,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--plan", action="store_true", help="propose a batch from the graded CSV")
     ap.add_argument("--execute", metavar="BATCH_JSON", help="perform an approved batch")
     ap.add_argument("--from-csv", help="graded CSV (default: today's card sidecar)")
-    ap.add_argument("--tier", default="trash", choices=["trash", "tier-1", "tier-2"])
+    ap.add_argument("--dms", action="store_true",
+                    help="operate on the DM report instead of the invitation report")
+    ap.add_argument("--tier", default="trash",
+                    choices=["trash", "tier-1", "tier-2", "fyi", "needs-reply"],
+                    help="invitation tier, or DM bucket with --dms")
     ap.add_argument("--action", choices=list(ACTIONS))
     ap.add_argument("--limit", type=int)
     ap.add_argument("--prefer", choices=["auto", "ego", "chrome"], default="auto")
@@ -365,11 +426,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.plan:
         vault = Path(os.environ.get("ERNEST_LOCAL_VAULT", profile / "vault"))
+        stem = "linkedin-dms" if args.dms else "linkedin-invitations"
         default_csv = (vault / "Ernest" / "00-Watch" /
-                       f"linkedin-invitations--{datetime.now(timezone.utc).date().isoformat()}.csv")
+                       f"{stem}--{datetime.now(timezone.utc).date().isoformat()}.csv")
         try:
             batch = plan(profile, Path(args.from_csv) if args.from_csv else default_csv,
-                         tier=args.tier, action=args.action, limit=args.limit, policy=policy)
+                         tier=args.tier, action=args.action, limit=args.limit,
+                         policy=policy, dms=args.dms)
         except FileNotFoundError as exc:
             print(f"plan: {exc}", file=sys.stderr)
             return cc.NOT_FOUND
@@ -377,7 +440,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"plan: {exc}", file=sys.stderr)
             return cc.USAGE
         path = write_batch(profile, batch)
-        human = (f"Planned {batch['count']} × {batch['action']} (tier {batch['tier']}). "
+        human = (f"Planned {batch['count']} × {batch['action']} "
+                 f"({'bucket' if args.dms else 'tier'} {batch['tier']}). "
                  f"{batch['not_included']} more did not fit today's cap.\n"
                  f"Batch: {path}\n"
                  f"Review it, then: act.py --execute {path}"

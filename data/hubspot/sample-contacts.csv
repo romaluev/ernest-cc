@@ -1,4 +1,4 @@
-email,firstname,lastname,company,tier,last_touch,next_action
-alex@example.com,Alex,Example,ExampleCo,partner,2026-06-18,Send proposal follow-up
-jordan@partner.co,Jordan,Rivera,PartnerCo,partner,2026-06-23,Qualify partnership
-lucas@apexbank.com,Lucas,Silva,Apex Bank,vip,2026-06-20,Re-engage important account
+email,firstname,lastname,company,tier,last_touch,next_action,open_deal,won_revenue
+alex@example.com,Alex,Example,ExampleCo,partner,2026-06-18,Send proposal follow-up,,
+jordan@partner.co,Jordan,Rivera,PartnerCo,partner,2026-06-23,Qualify partnership,,42000
+lucas@apexbank.com,Lucas,Silva,Apex Bank,vip,2026-06-20,Re-engage important account,true,180000

@@ -19,6 +19,7 @@ from .pdf.chrome import to_pdf as html_to_pdf
 _PRIORITY = [
     "brief",
     "b2b-grades",
+    "linkedin-dms",
     "linkedin-invitations",
     "talent-grades",
     "mail-audit",
@@ -29,12 +30,13 @@ _PRIORITY = [
 ]
 
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
-_TIER = re.compile(r"\[(TIER-1|TIER-2|TIER-3|TRASH|HOLD|BUCKET)\]")
+_TIER = re.compile(r"\[(TIER-1|TIER-2|TIER-3|TRASH|HOLD|BUCKET|ESCALATION)\]")
 _META = re.compile(r"^[A-Za-z][\w .\-/]*:\s")
 _HEADING = re.compile(r"^##\s+(.+?)\s*$")
 
 _BADGE_CLASS = {"TIER-1": "t1", "TIER-2": "t2", "TIER-3": "t3", "TRASH": "trash",
-                "HOLD": "hold", "BUCKET": "bucket"}
+                "HOLD": "hold", "BUCKET": "bucket",
+                "ESCALATION": "escalation"}
 # Cover is one screen. Remaining cards flow in a single pack (Chrome paginates).
 
 

@@ -26,7 +26,7 @@ def write(rel: str, text: str, execute: bool = False) -> None:
 # A shim so the copied engine subset imports as `ernest.*` without the rest of it
 # --------------------------------------------------------------------------- #
 write("linkedin_triage.py", '''#!/usr/bin/env python3
-"""Standalone entry point: grade the invitation queue and write the report.
+"""Standalone entry point: triage invitations AND DMs, and write both reports.
 
 The bundle carries the grading subset of the Ernest engine under `ernest/`, so
 the same grading path the full product runs works here unchanged — and so the

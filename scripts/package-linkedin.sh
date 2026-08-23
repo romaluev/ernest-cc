@@ -11,8 +11,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="$(sed -n 's/^version: *//p' "$ROOT/skills/linkedin-invitations/SKILL.md" | head -1)"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${LI_BUNDLE_VERSION:-2.0.0}"
 OUT="$ROOT/dist"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,7 +32,8 @@ echo "Packaging $NAME"
 # --- the skill, verbatim ----------------------------------------------------
 mkdir -p "$STAGE/skills"
 cp -R "$ROOT/skills/linkedin-invitations" "$STAGE/skills/"
-say "skill + rubric reference"
+cp -R "$ROOT/skills/linkedin-inbox" "$STAGE/skills/"
+say "both skills (invitations + inbox) with the rubric reference"
 
 # --- the adapter ------------------------------------------------------------
 mkdir -p "$STAGE/adapters/linkedin"
@@ -45,7 +45,7 @@ say "ingest ladder, browser drivers, act layer, DOM notes"
 # --- the engine subset it actually needs ------------------------------------
 # Only what grading touches. The bundle must run without the rest of Ernest.
 mkdir -p "$STAGE/ernest"
-for f in __init__.py config.py grading.py sources.py grade_run.py; do
+for f in __init__.py config.py grading.py sources.py grade_run.py li_insight.py; do
   cp "$ROOT/ernest/$f" "$STAGE/ernest/$f"
 done
 cat > "$STAGE/ernest/README.md" <<'EOF'
@@ -56,19 +56,23 @@ EOF
 mkdir -p "$STAGE/data/grading" "$STAGE/data/linkedin"
 cp "$ROOT/data/grading/linkedin-rubric.json" "$STAGE/data/grading/"
 cp "$ROOT/data/linkedin/invitations.csv" "$STAGE/data/linkedin/"
-say "grading engine subset + sample data"
+cp "$ROOT/data/linkedin/messages.csv" "$STAGE/data/linkedin/"
+mkdir -p "$STAGE/data/hubspot"
+cp "$ROOT/data/hubspot/sample-contacts.csv" "$STAGE/data/hubspot/"
+say "grading + insight engine, sample invitations, DMs and CRM facts"
 
 # --- tests, so a recipient can verify the guarantees themselves --------------
 mkdir -p "$STAGE/tests/fixtures"
 cp "$ROOT/tests/test_linkedin_grading.py" "$ROOT/tests/test_linkedin_ingest.py" \
-   "$ROOT/tests/test_linkedin_actions.py" "$STAGE/tests/"
+   "$ROOT/tests/test_linkedin_actions.py" "$ROOT/tests/test_linkedin_insight.py" \
+   "$ROOT/tests/test_linkedin_browser.py" "$STAGE/tests/"
 cp "$ROOT/tests/fixtures/linkedin-archive.zip" "$STAGE/tests/fixtures/" 2>/dev/null || true
 say "tests"
 
 # --- docs -------------------------------------------------------------------
 mkdir -p "$STAGE/docs"
-cp "$ROOT/docs/ingest-ladder.md" "$STAGE/docs/"
-say "docs"
+cp "$ROOT/docs/ingest-ladder.md" "$ROOT/docs/linkedin-spec.md" "$STAGE/docs/"
+say "docs: the ingest ladder and the full decision spec"
 
 python3 "$ROOT/scripts/package_linkedin_files.py" "$STAGE" "$VERSION"
 say "README (human), AGENTS.md (agent), install.sh, cron, engine shim"

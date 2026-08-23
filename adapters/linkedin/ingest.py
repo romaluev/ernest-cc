@@ -420,7 +420,15 @@ def ingest(profile: Path, *, only_rung: Optional[int] = None, zip_path: Optional
            prefer: str = "auto", dry_run: bool = False) -> Dict[str, Any]:
     li_dir, data_dir = profile / "data" / "linkedin", profile / "data"
     attempts: List[Dict[str, str]] = []
-    wanted = [only_rung] if only_rung else [1, 2, 3, 4]
+    if only_rung:
+        wanted = [only_rung]
+    elif zip_path:
+        # An explicitly named archive is an instruction, not a hint. Falling
+        # through to the cache here silently ignored the file the caller just
+        # handed us and reported stale data as if it were the import.
+        wanted = [2, 3, 4]
+    else:
+        wanted = [1, 2, 3, 4]
 
     for rung in wanted:
         try:

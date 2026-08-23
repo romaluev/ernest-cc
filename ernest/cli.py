@@ -581,7 +581,8 @@ def cmd_prefs(cfg: config.Config, args: argparse.Namespace) -> int:
 def cmd_grade(cfg: config.Config, args: argparse.Namespace) -> int:
     all_ = not args.b2b and not args.talent and not args.linkedin
     paths = grade_run.run(cfg, b2b=args.b2b or all_, talent=args.talent or all_,
-                          linkedin=args.linkedin or all_)
+                          linkedin=args.linkedin or all_,
+                          linkedin_dms=args.linkedin or all_)
     if not paths:
         print("Grade: nothing to grade. Add data/mail, data/sourcing, or data/linkedin rows.")
         return 0

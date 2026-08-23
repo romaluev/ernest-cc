@@ -336,8 +336,14 @@ _DEFAULTS: Dict[str, dict] = {
                   "function_keywords": [], "intent_keywords": [],
                   "tier1_countries": [], "min_mutual_connections_signal": 5},
         "job_seeker": {"keywords": ["open to work", "#opentowork"]},
+        "escalation": {"money_keywords": ["refund", "chargeback"],
+                       "legal_keywords": ["cease and desist"],
+                       "security_keywords": ["data breach"],
+                       "churn_keywords": ["cancel our"],
+                       "safety_keywords": ["harassment"]},
         "spam": {"vendor_keywords": [], "headline_keywords": [],
-                 "template_fingerprints": [], "low_connection_threshold": 50,
+                 "template_fingerprints": [], "dm_blast_keywords": [],
+                 "low_connection_threshold": 50,
                  "threshold": 5.0},   # must equal SPAM_THRESHOLD; tests assert it
         "signal_map": {"tier-1": "Positive", "tier-2": "None", "hold": "Positive",
                        "trash": "Spam", "vendor": "Seller Pitch",
@@ -645,3 +651,211 @@ def grade_linkedin_inbound(
     flags.append("No ICP hit and not obvious spam. Unknown stranger — decide by hand or leave pending.")
     return LinkedInGrade("tier-2", "low", ["No decisive signal; defaulting to Tier-2"], flags,
                          DEFAULT_TIER2_SCORE, signal=_signal_for(r, "tier-2"), action="Review")
+
+
+# --------------------------------------------------------------------------- #
+# LinkedIn direct messages
+# --------------------------------------------------------------------------- #
+#
+# An invitation asks "who is this". A DM asks a different first question: "am I
+# the one holding this up". A thread we have answered before is a relationship,
+# and a relationship is never spam no matter what the words look like.
+#
+# ORDER (again, the safety mechanism):
+#
+#   escalation -> hold -> replied-before -> owed+ICP -> job seeker -> spam -> FYI
+#
+# `escalation` runs first and outranks everything, including our own prior
+# replies: a refund dispute or a security report from a long-standing contact is
+# MORE urgent than one from a stranger, not less.
+
+LINKEDIN_DM_RANK = {"escalation": 0, "needs-reply": 1, "hold": 2,
+                    "fyi": 3, "trash": 4, "unknown": 5}
+
+LINKEDIN_DM_WEIGHTS = {
+    "owed": 12.0,           # they wrote last and we never answered
+    "relationship": 18.0,   # we have replied in this thread before
+    "icp": 10.0,            # per ICP signal in what they wrote
+    "intent": 12.0,         # per buying-intent keyword
+    "question": 4.0,        # they asked something answerable
+    "waiting_week": 2.0,    # per week waiting, capped
+}
+DM_WAITING_CAP = 8
+
+
+@dataclass
+class LinkedInDMGrade(Grade):
+    """Grade plus the bucket, the HubSpot signal, and the proposed action."""
+    bucket: str = "fyi"     # escalation | needs-reply | hold | fyi | trash
+    signal: str = "None"
+    action: str = "Read"
+
+    @property
+    def rank(self) -> int:  # type: ignore[override]
+        return LINKEDIN_DM_RANK.get(self.bucket, 5)
+
+
+def grade_linkedin_dm(
+    *,
+    counterparty: str = "",
+    text: str = "",
+    opener: str = "",
+    headline: str = "",
+    subject: str = "",
+    folder: str = "INBOX",
+    owed: bool = False,
+    ever_replied: bool = False,
+    days_waiting: int = 0,
+    message_count: int = 1,
+    crm_tier: str = "",
+    suppression_lists: Optional[List[str]] = None,
+    prior_contact: bool = False,
+    cfg: Optional[Config] = None,
+) -> LinkedInDMGrade:
+    """Triage one message thread. Read-only: proposes an action, never takes one."""
+    r = _load_rubric(cfg, "linkedin")
+    hay = _hay(text, subject, headline, counterparty)
+    flags: List[str] = []
+
+    # 0. ESCALATION — the dozen things automation must never answer alone.
+    #    Checked before everything, including our own prior replies.
+    esc = r.get("escalation", {})
+    for key, label in (("money_keywords", "Money or billing"),
+                       ("legal_keywords", "Legal or contractual"),
+                       ("security_keywords", "Security or data"),
+                       ("churn_keywords", "Churn or cancellation"),
+                       ("safety_keywords", "Safety or abuse")):
+        hit = _any_in(hay, esc.get(key, []))
+        if hit:
+            flags.append("Automation must not answer this alone.")
+            return LinkedInDMGrade("tier-1", "high", [f"{label}: '{hit}'"], flags, 100.0,
+                                   bucket="escalation", signal="Positive",
+                                   action="Answer personally — do not delegate or template")
+
+    # 1. SUPPRESSION and 2. HOLD reuse the invitation rubric: the same person is
+    #    the same person whether they invited us or messaged us.
+    supp = r.get("suppression", {})
+    for list_id in (suppression_lists or []):
+        entry = supp.get(str(list_id))
+        if entry and entry.get("route") != "accept":
+            return LinkedInDMGrade("hold", "high",
+                                   [f"On HubSpot list {list_id} ({entry.get('name', 'suppressed')})"],
+                                   flags, 0.0, bucket="hold",
+                                   signal=entry.get("signal", "Do Not Contact"),
+                                   action="Hold — suppressed list, decide by hand")
+    hold = r.get("hold", {})
+    for key, label, signal, action in (
+        ("competitor_keywords", "Competitor", "Do Not Contact", "Hold — do not answer from here"),
+        ("legal_or_regulatory_keywords", "Legal/regulatory", "Do Not Contact", "Hold — route to legal"),
+        ("press_keywords", "Press/journalist", "Positive", "Hold — route to comms, do not ignore"),
+        ("investor_keywords", "Investor", "Positive", "Hold — the CEO decides personally"),
+    ):
+        hit = _any_in(hay, hold.get(key, []))
+        if hit:
+            return LinkedInDMGrade("hold", "medium", [f"{label}: '{hit}'"], flags, 0.0,
+                                   bucket="hold", signal=signal, action=action)
+
+    # 3. A THREAD WE HAVE ANSWERED is a relationship. It can be low priority, but
+    #    it is never spam — this is the branch that stops the filter embarrassing
+    #    us with someone we already talked to.
+    reasons: List[str] = []
+    score = 0.0
+    if ever_replied:
+        reasons.append("We have replied in this thread before")
+        score += LINKEDIN_DM_WEIGHTS["relationship"]
+    if crm_tier:
+        crm_map = {k.lower(): v for k, v in (r.get("crm_tier_map") or {}).items()}
+        mapped = crm_map.get(crm_tier.lower())
+        if mapped:
+            reasons.append(f"CRM tier '{crm_tier}'")
+            score += CRM_BASE["tier-1"] if mapped == "tier-1" else CRM_BASE["other"]
+    if prior_contact:
+        reasons.append("Known to us in the CRM")
+        score += LINKEDIN_DM_WEIGHTS["relationship"]
+
+    # 4. ICP and intent, same lists as invitations.
+    t1 = r.get("tier1", {})
+    for key, listname, label in (("icp", "buyer_archetypes", "Buyer archetype"),
+                                 ("icp", "verticals", "Vertical"),
+                                 ("icp", "platform_buyers", "Platform/API"),
+                                 ("icp", "companies", "Major company"),
+                                 ("intent", "intent_keywords", "Buying intent")):
+        hits = _all_in(hay, t1.get(listname, []))
+        if hits:
+            reasons.append(f"{label}: {', '.join(hits[:3])}")
+            score += LINKEDIN_DM_WEIGHTS[key] * len(hits)
+    if owed:
+        reasons.append("They wrote last; no reply from us")
+        score += LINKEDIN_DM_WEIGHTS["owed"]
+        score += LINKEDIN_DM_WEIGHTS["waiting_week"] * min(days_waiting // 7, DM_WAITING_CAP)
+    if "?" in text:
+        reasons.append("They asked a question")
+        score += LINKEDIN_DM_WEIGHTS["question"]
+
+    # 5. SPAM — scored, and only ever for threads we have NEVER answered. The
+    #    OPENER is what gets scored, not the whole thread: quoting a pitch back
+    #    while declining it must not make the thread look like the pitch.
+    sp = r.get("spam", {})
+    threshold = float(sp.get("threshold", SPAM_THRESHOLD) or SPAM_THRESHOLD)
+    if not ever_replied and not prior_contact:
+        spam_hay = _hay(opener or text, headline)
+        spam_reasons: List[str] = []
+        spam_score = 0.0
+        vendors = _all_in(spam_hay, sp.get("vendor_keywords", []))
+        if vendors:
+            spam_reasons.append(f"Cold pitch: {', '.join(vendors[:3])}")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["vendor_phrase"] * len(vendors)
+        heads = _all_in(spam_hay, sp.get("headline_keywords", []))
+        if heads:
+            spam_reasons.append(f"Spam headline: {', '.join(heads[:2])}")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["spam_headline"] * len(heads)
+        templates = _all_in(spam_hay, sp.get("template_fingerprints", []))
+        if templates:
+            spam_reasons.append(f"Mass template: '{templates[0]}'")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["template_note"] * len(templates)
+        blasts = _all_in(spam_hay, sp.get("dm_blast_keywords", []))
+        if blasts:
+            spam_reasons.append(f"Sequence blast: '{blasts[0]}'")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["vendor_phrase"] * len(blasts)
+        if folder.upper() == "SPAM":
+            spam_reasons.append("LinkedIn already filed it as spam")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["spam_headline"]
+        # A one-shot pitch nobody answered is the classic shape.
+        if message_count == 1 and (vendors or heads or blasts):
+            spam_reasons.append("Single unanswered cold message")
+            spam_score += LINKEDIN_SPAM_WEIGHTS["no_mutuals"]
+        # Guard on RELATIONSHIP evidence, never on the accumulated score. `score`
+        # includes owed and waiting-time points, so guarding on it meant the
+        # longer a cold pitch sat ignored the better it escaped the filter —
+        # exactly backwards. Prior replies and prior contact are already excluded
+        # by the enclosing branch; a CRM tier is the remaining relationship.
+        if spam_score >= threshold and not crm_tier:
+            return LinkedInDMGrade("trash",
+                                   "high" if spam_score >= threshold * 1.6 else "medium",
+                                   spam_reasons, flags, spam_score, bucket="trash",
+                                   signal=_signal_for(r, "vendor") if (vendors or heads or blasts)
+                                   else _signal_for(r, "trash"),
+                                   action="Archive")
+        if spam_reasons:
+            flags.append(f"Some spam signal ({spam_score:.1f} < {threshold:g}): "
+                         f"{'; '.join(spam_reasons[:2])}.")
+
+    # 6. JOB SEEKER — its own lane, never spam.
+    js = _any_in(hay, (r.get("job_seeker") or {}).get("keywords", []))
+    if js and not ever_replied:
+        return LinkedInDMGrade("tier-2", "medium", [f"Job seeker: '{js}'"], flags, score,
+                               bucket="fyi", signal=_signal_for(r, "job_seeker"),
+                               action="Forward to recruiting, or decline politely")
+
+    # 7. OWED -> needs a reply. Not owed -> FYI.
+    if owed:
+        conf = "high" if score >= 30 else "medium" if score >= 12 else "low"
+        if score < 12:
+            flags.append("Owed but no strong signal — worth a look, not urgent.")
+        return LinkedInDMGrade("tier-1" if score >= 30 else "tier-2", conf,
+                               reasons or ["They wrote last; no reply from us"], flags, score,
+                               bucket="needs-reply", signal=_signal_for(r, "tier-1")
+                               if score >= 30 else "None",
+                               action="Reply" if score >= 12 else "Reply or archive")
+    return LinkedInDMGrade("tier-2", "low", reasons or ["Nothing owed; no action"], flags, score,
+                           bucket="fyi", signal="None", action="Read")

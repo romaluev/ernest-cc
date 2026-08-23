@@ -60,6 +60,8 @@ class Contact:
     tier: str = ""
     last_touch: Optional[date] = None
     next_action: str = ""
+    open_deal: bool = False       # live money on the relationship
+    won_revenue: float = 0.0      # closed-won total
     source: str = "local-export"
 
 
@@ -193,6 +195,9 @@ def load_contacts(cfg: Config) -> List[Contact]:
                         tier=row.get("tier", "").strip(),
                         last_touch=_parse_date(row.get("last_touch", "")),
                         next_action=row.get("next_action", "").strip(),
+                        open_deal=(row.get("open_deal", "") or "").strip().lower()
+                        in ("1", "true", "yes", "y", "open"),
+                        won_revenue=_opt_float(row.get("won_revenue", "")),
                     ))
         except (OSError, ValueError):
             continue
@@ -261,6 +266,16 @@ def _parse_date_loose(value: str) -> Optional[date]:
         return None
 
 
+def _opt_float(value: str) -> float:
+    """Absent means 0, not unknown — a missing revenue column is not evidence
+    of revenue. Unlike counts, 0 and blank mean the same thing for money."""
+    text = re.sub(r"[^0-9.\-]", "", (value or "").strip())
+    try:
+        return float(text) if text else 0.0
+    except ValueError:
+        return 0.0
+
+
 def _opt_int(value: str) -> Optional[int]:
     """'' -> None (unknown), '0' -> 0 (looked, found none). The distinction matters."""
     text = (value or "").strip().replace(",", "")
@@ -322,8 +337,14 @@ def load_invitations(cfg: Config) -> List[Invitation]:
     out: List[Invitation] = []
     seen: set = set()
     for path in sorted(li_dir.glob("*.csv")):
-        if "connection" in path.name.lower() and "invitation" not in path.name.lower():
-            continue  # Connections.csv is the network, not the queue
+        name = path.name.lower()
+        # ALLOW-LIST, not a deny-list. A real LinkedIn export drops Invitations,
+        # Connections, and messages side by side in one folder; excluding only
+        # the names we happened to think of let messages.csv load as invitations
+        # and silently inflate the queue.
+        if not (name.startswith("invitation") or "invitations" in name
+                or name == "invites.csv"):
+            continue
         source = default_source
         try:
             with path.open(encoding="utf-8-sig", newline="") as fh:
@@ -362,3 +383,201 @@ def load_invitations(cfg: Config) -> List[Invitation]:
         except (OSError, ValueError):
             continue
     return out
+
+
+# --------------------------------------------------------------------------- #
+# LinkedIn inbound (direct messages)
+# --------------------------------------------------------------------------- #
+
+@dataclass
+class LIMessage:
+    at: Optional[date]
+    sender: str
+    direction: str      # inbound | outbound
+    body: str = ""
+    subject: str = ""
+
+
+@dataclass
+class Conversation:
+    """One LinkedIn message thread.
+
+    Unlike an invitation, a thread has HISTORY, so the first question is not
+    "who is this" but "am I the one holding this up". Everything else follows
+    from that.
+    """
+    id: str
+    counterparty: str
+    counterparty_url: str = ""
+    subject: str = ""
+    folder: str = ""            # INBOX | ARCHIVE | SPAM (LinkedIn's own label)
+    messages: List[LIMessage] = field(default_factory=list)
+    source: str = "local-export"
+
+    @property
+    def inbound(self) -> List[LIMessage]:
+        return [m for m in self.messages if m.direction == "inbound"]
+
+    @property
+    def last_inbound(self) -> Optional[date]:
+        return max((m.at for m in self.inbound if m.at), default=None)
+
+    @property
+    def last_outbound(self) -> Optional[date]:
+        return max((m.at for m in self.messages
+                    if m.direction == "outbound" and m.at), default=None)
+
+    @property
+    def owed(self) -> bool:
+        """They wrote last and we never answered. The whole triage hinges on it."""
+        if self.last_inbound is None:
+            return False
+        if self.last_outbound is None:
+            return True
+        return self.last_outbound < self.last_inbound
+
+    @property
+    def ever_replied(self) -> bool:
+        """A thread we have answered before is a relationship, not cold outreach."""
+        return self.last_outbound is not None
+
+    @property
+    def opener(self) -> str:
+        """Their first message — what a cold sender actually pitched."""
+        first = sorted(self.inbound, key=lambda m: (m.at or date.min))
+        return first[0].body if first else ""
+
+    @property
+    def text(self) -> str:
+        return " ".join(m.body for m in self.inbound)
+
+    def days_waiting(self, today: date) -> int:
+        return max(0, (today - self.last_inbound).days) if self.last_inbound else 0
+
+
+_MSG_ALIASES = {
+    "id": ("conversationid", "conversation_id", "threadid", "id"),
+    "subject": ("subject", "conversationtitle", "title"),
+    "sender": ("from", "sender", "sendername"),
+    "sender_url": ("senderprofileurl", "sender_profile_url", "fromprofileurl"),
+    "recipient": ("to", "recipient", "recipientname"),
+    "recipient_url": ("recipientprofileurls", "recipientprofileurl", "toprofileurl"),
+    "at": ("date", "sentat", "senttime", "datesent"),
+    "body": ("content", "body", "message"),
+    "folder": ("folder", "mailbox"),
+}
+
+
+def _pick_msg(row: dict, field_name: str) -> str:
+    norm = {re.sub(r"[^a-z0-9]", "", (k or "").lower()): v for k, v in row.items()}
+    for alias in _MSG_ALIASES[field_name]:
+        val = norm.get(re.sub(r"[^a-z0-9]", "", alias))
+        if val:
+            return str(val).strip()
+    return ""
+
+
+def _owner_from_memory(cfg: Config) -> str:
+    """The account owner's name, from memory/ceo-persona.md."""
+    try:
+        text = (cfg.memory_dir / "ceo-persona.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        m = re.match(r"\s*-\s*Name:\s*(.+)", line, re.I)
+        if not m:
+            continue
+        # The shipped persona packs several fields onto one line
+        # ("Sam Rivera. Role: CEO & Co-Founder, Northwind."), so keep only the
+        # name itself — matching on the whole line silently matches nobody, and
+        # a silent no-match inverts the direction of every message.
+        name = re.split(r"[.,;|]| - |\bRole\b", m.group(1).strip(), maxsplit=1)[0].strip()
+        if name and "(" not in name:
+            return name.lower()
+    return ""
+
+
+def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> List[Conversation]:
+    """Read `data/linkedin/messages*.csv` into threads.
+
+    LinkedIn's archive ships one ROW PER MESSAGE with FROM/TO on each, so the
+    direction of every message is derived by comparing the sender against the
+    account owner rather than trusted from a column — the export has no such
+    column. Owner identity comes from `memory/ceo-persona.md`, falling back to
+    whoever sends the most messages across the file, which is the owner by
+    construction in an inbox export.
+    """
+    li_dir = cfg.data_dir / "linkedin"
+    if not li_dir.is_dir():
+        return []
+    default_source = "local-export"
+    try:
+        default_source = json.loads(
+            (li_dir / ".ingest.json").read_text(encoding="utf-8")).get("source") or default_source
+    except (OSError, ValueError):
+        pass
+
+    rows: List[dict] = []
+    for path in sorted(li_dir.glob("*.csv")):
+        name = path.name.lower()
+        if "message" not in name and "conversation" not in name:
+            continue
+        try:
+            with path.open(encoding="utf-8-sig", newline="") as fh:
+                rows.extend(list(csv.DictReader(fh)))
+        except (OSError, ValueError):
+            continue
+    if not rows:
+        return []
+
+    owners = {n.strip().lower() for n in (owner_names or []) if n and n.strip()}
+    if not owners:
+        owners = {n for n in (_owner_from_memory(cfg),) if n}
+    if not owners:
+        # Fallback: the owner is whoever appears in the MOST DISTINCT THREADS,
+        # not whoever sent the most messages. A single persistent spammer can
+        # out-message the account owner inside one thread — and misdetecting the
+        # owner inverts the direction of every message in the export, which
+        # turns their own replies into inbound mail and flips the whole report.
+        threads: dict = {}
+        for row in rows:
+            who = _pick_msg(row, "sender").lower()
+            cid = _pick_msg(row, "id") or _pick_msg(row, "sender_url")
+            if who:
+                threads.setdefault(who, set()).add(cid)
+        if threads:
+            best = max(threads, key=lambda w: (len(threads[w]), w))
+            owners = {best}
+
+    convos: dict = {}
+    for row in rows:
+        sender = _pick_msg(row, "sender")
+        recipient = _pick_msg(row, "recipient")
+        outbound = sender.lower() in owners
+        other = recipient if outbound else sender
+        other_url = _pick_msg(row, "recipient_url") if outbound else _pick_msg(row, "sender_url")
+        other_url = (other_url or "").split("|")[0].split(";")[0].strip()
+        cid = _pick_msg(row, "id") or (identity_key_for(other_url, other) if (other_url or other) else "")
+        if not cid:
+            continue
+        convo = convos.get(cid)
+        if convo is None:
+            convo = convos[cid] = Conversation(
+                id=cid, counterparty=other, counterparty_url=other_url,
+                subject=_pick_msg(row, "subject"),
+                folder=(_pick_msg(row, "folder") or "INBOX").upper(),
+                source=default_source)
+        if not convo.counterparty and other:
+            convo.counterparty, convo.counterparty_url = other, other_url
+        convo.messages.append(LIMessage(
+            at=_parse_date_loose(_pick_msg(row, "at")),
+            sender=sender or ("me" if outbound else other),
+            direction="outbound" if outbound else "inbound",
+            body=_pick_msg(row, "body"),
+            subject=_pick_msg(row, "subject")))
+    return [c for c in convos.values() if c.inbound]
+
+
+def identity_key_for(public_url: str = "", name: str = "") -> str:
+    from .grading import identity_key
+    return identity_key(public_url, "", name)

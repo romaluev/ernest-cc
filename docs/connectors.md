@@ -101,6 +101,7 @@ Offline paths below are where an export *goes*. Folders that ship with sample da
 | Support triage | your exported tickets | Pylon + Zendesk + Intercom (Fin) + Slack |
 | Hiring pipeline | your exported candidates | Ashby + Calendar + Gmail/Slack + Notion |
 | Lead enrichment | your exported leads | Clay + Apollo + HubSpot |
+| LinkedIn DMs | `data/linkedin/messages*.csv` via the same adapter | none — see the ingest ladder |
 | LinkedIn invitations | `data/linkedin/*.csv` via `adapters/linkedin/ingest.py` | none — no LinkedIn MCP; the adapter drives a signed-in browser outside the gate |
 | Deal desk (contracts) | dry run only | HubSpot + Ironclad (via MATIC) + Notion |
 
