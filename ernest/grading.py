@@ -316,6 +316,33 @@ _DEFAULTS: Dict[str, dict] = {
             "small_media_keywords": ["newsletter", "blog", "small publication"],
         },
     },
+    "linkedin": {
+        # Deliberately thin. The real lists live in
+        # data/grading/linkedin-rubric.json; this exists so a missing or
+        # unparseable file degrades to "surface everything for a human" rather
+        # than to silent confident answers — and so `ernest doctor` can name
+        # which signal family a hand-edit turned off.
+        "crm_tier_map": {"vip": "tier-1", "customer": "tier-1", "investor": "hold",
+                         "partner": "tier-2"},
+        "suppression": {"411": {"name": "Suppressed ALL (union)", "route": "hold",
+                                "signal": "Do Not Contact"}},
+        "hold": {"press_keywords": ["journalist", "reporter"],
+                 "investor_keywords": ["general partner", "angel investor"],
+                 "legal_or_regulatory_keywords": ["general counsel", "regulator"],
+                 "competitor_keywords": [],
+                 "exec_escalation_keywords": ["spoke with alex"]},
+        "tier1": {"buyer_archetypes": [], "verticals": [], "platform_buyers": [],
+                  "providers": [], "companies": [], "seniority_keywords": [],
+                  "function_keywords": [], "intent_keywords": [],
+                  "tier1_countries": [], "min_mutual_connections_signal": 5},
+        "job_seeker": {"keywords": ["open to work", "#opentowork"]},
+        "spam": {"vendor_keywords": [], "headline_keywords": [],
+                 "template_fingerprints": [], "low_connection_threshold": 50,
+                 "threshold": 5.0},   # must equal SPAM_THRESHOLD; tests assert it
+        "signal_map": {"tier-1": "Positive", "tier-2": "None", "hold": "Positive",
+                       "trash": "Spam", "vendor": "Seller Pitch",
+                       "job_seeker": "JOB_SEEKER", "suppressed": "Do Not Contact"},
+    },
     "talent": {
         "pool": "ex-NovaLabs",
         "tier1": {
@@ -355,3 +382,266 @@ _DEFAULTS: Dict[str, dict] = {
         },
     },
 }
+
+
+# --------------------------------------------------------------------------- #
+# LinkedIn inbound grading
+# --------------------------------------------------------------------------- #
+#
+# Surface: a pending connection invitation (or an opening DM) from a stranger.
+# Unlike mail, there is no thread history and no CRM record for most of the
+# population — the whole signal is a headline, an optional 300-char note, and the
+# SHAPE of the sender's profile.
+#
+# The DECISION ORDER below is the safety mechanism and is not negotiable:
+#
+#     suppression -> hold -> CRM tier -> tier-1 signals -> job seeker
+#                 -> spam -> default tier-2
+#
+# Checking tier before suppression is how a competitor or a journalist ends up
+# accepted and then sequenced. Reordering these branches is a behavior change,
+# not a refactor.
+
+LINKEDIN_RANK = {"tier-1": 0, "hold": 1, "tier-2": 2, "trash": 3, "unknown": 4}
+
+# Per-DISTINCT-hit weights (signal density: two independent signals beat one
+# repeated). Documented in skills/linkedin-invitations/references/rubric.md and
+# kept honest by tests/test_skill_contract.py.
+LINKEDIN_WEIGHTS = {
+    "buyer_archetype": 14.0,   # per buyer-archetype hit (AI studio, agency, production house)
+    "vertical": 10.0,          # per won-revenue vertical hit
+    "platform_buyer": 14.0,    # per API/white-label signal
+    "provider": 12.0,          # per model/cloud-provider hit
+    "company": 12.0,           # per major-company hit
+    "seniority": 8.0,          # per decision-maker title hit
+    "function": 4.0,           # per relevant-function hit
+    "intent": 10.0,            # per buying-intent keyword in the note
+    "reputation_or_prior": 16.0,  # single bump: CEO reference OR CRM prior contact
+    "mutuals": 6.0,            # single bump: mutual connections above rubric floor
+    "tier1_country": 3.0,      # single bump: a country we actually close in
+}
+
+# Spam is scored, not matched — one template phrase is not proof of anything.
+# A sender needs SPAM_THRESHOLD points of independent structural evidence.
+LINKEDIN_SPAM_WEIGHTS = {
+    "vendor_phrase": 4.0,      # per distinct cold-vendor phrase in the note
+    "spam_headline": 3.0,      # per distinct spam-headline pattern
+    "template_note": 2.0,      # per distinct mass-template fingerprint
+    "no_mutuals": 1.5,         # zero mutual connections
+    "thin_network": 2.0,       # connection count below the rubric floor
+    "empty_note": 0.5,         # no note at all on a cold invite
+}
+# Default only. The live value is `spam.threshold` in the rubric JSON, so the
+# improve loop has a knob to turn when the override rate says we are too eager.
+SPAM_THRESHOLD = 5.0
+
+
+@dataclass
+class LinkedInGrade(Grade):
+    """A Grade plus the two fields HubSpot already models for this surface.
+
+    `signal` emits `linkedin_message_signal` VERBATIM
+    (Positive | Negative | Seller Pitch | JOB_SEEKER | Do Not Contact | Spam | None)
+    and `action` is the only thing the report is allowed to propose.
+    """
+    signal: str = "None"
+    action: str = "Review"
+
+    @property
+    def rank(self) -> int:  # type: ignore[override]
+        return LINKEDIN_RANK.get(self.tier, 4)
+
+
+def _signal_for(rubric: dict, key: str) -> str:
+    return (rubric.get("signal_map") or {}).get(key, "None")
+
+
+def identity_key(public_url: str = "", urn: str = "", name: str = "") -> str:
+    """Stable dedup key across LinkedIn's two identifier shapes.
+
+    HubSpot's own `linkedin_identity_key` field description records the problem:
+    the same human arrives once by public slug and once by member URN
+    (`ACoAA...`), so keying on either alone double-counts them. Prefer the slug,
+    fall back to the URN, fall back to a normalized name.
+    """
+    slug = ""
+    if public_url:
+        m = re.search(r"/in/([^/?#]+)", public_url.strip().rstrip("/"), re.I)
+        slug = (m.group(1) if m else public_url.strip().rstrip("/").rsplit("/", 1)[-1]).lower()
+    if slug:
+        return f"slug:{slug}"
+    if urn:
+        return f"urn:{urn.strip().lower()}"
+    return f"name:{re.sub(r'[^a-z0-9]+', '-', name.strip().lower()).strip('-')}"
+
+
+def grade_linkedin_inbound(
+    *,
+    name: str = "",
+    headline: str = "",
+    note: str = "",
+    company: str = "",
+    location: str = "",
+    mutual_connections: Optional[int] = None,
+    connections: Optional[int] = None,
+    crm_tier: str = "",
+    suppression_lists: Optional[List[str]] = None,
+    prior_contact: bool = False,
+    cfg: Optional[Config] = None,
+) -> LinkedInGrade:
+    """Tier one pending invitation. Read-only: proposes an action, never takes one.
+
+    `mutual_connections` / `connections` are Optional on purpose — `None` means
+    "we did not look", which is not the same as 0 and must never be scored as
+    evidence of a thin network. Missing != 0.
+    """
+    r = _load_rubric(cfg, "linkedin")
+    hay = _hay(headline, note, company, location, name)
+    flags: List[str] = []
+
+    # 1. SUPPRESSION — before any tier is assigned. The order is the safety rule.
+    supp = r.get("suppression", {})
+    for list_id in (suppression_lists or []):
+        entry = supp.get(str(list_id))
+        if not entry:
+            continue
+        route = entry.get("route", "hold")
+        reason = f"On HubSpot list {list_id} ({entry.get('name', 'suppressed')})"
+        if route == "accept":
+            return LinkedInGrade("tier-1", "high", [reason], flags, CRM_BASE["other"],
+                                 signal=entry.get("signal", "None"), action="Accept")
+        if route == "drop":
+            return LinkedInGrade("trash", "high", [reason], flags, 0.0,
+                                 signal=entry.get("signal", "None"), action="Ignore")
+        return LinkedInGrade("hold", "high", [reason], flags, 0.0,
+                             signal=entry.get("signal", _signal_for(r, "suppressed")),
+                             action="Hold — suppressed list, decide by hand")
+
+    # 2. HOLD — press, investors, legal, competitors, exec references. Never
+    #    auto-resolved in either direction. Press is high-stakes here, not trash.
+    hold = r.get("hold", {})
+    for key, label, signal, action in (
+        ("competitor_keywords", "Competitor", "Do Not Contact",
+         "Hold — do not accept unread"),
+        ("legal_or_regulatory_keywords", "Legal/regulatory", "Do Not Contact",
+         "Hold — route to legal, never answer from here"),
+        ("press_keywords", "Press/journalist", "Positive",
+         "Hold — route to comms, do not ignore"),
+        ("investor_keywords", "Investor", "Positive",
+         "Hold — the CEO decides personally"),
+        ("exec_escalation_keywords", "Claims a prior conversation with the CEO", "Positive",
+         "Hold — verify the claim before accepting"),
+    ):
+        hit = _any_in(hay, hold.get(key, []))
+        if hit:
+            return LinkedInGrade("hold", "medium", [f"{label}: '{hit}'"], flags, 0.0,
+                                 signal=signal, action=action)
+
+    # 3. CRM tier — a known relationship outranks anything inferred from a headline.
+    crm_map = {k.lower(): v for k, v in (r.get("crm_tier_map") or {}).items()}
+    if crm_tier and crm_tier.lower() in crm_map:
+        tier = crm_map[crm_tier.lower()]
+        base = CRM_BASE["tier-1"] if tier == "tier-1" else CRM_BASE["other"]
+        action = "Accept" if tier in ("tier-1", "tier-2") else "Hold — known relationship"
+        return LinkedInGrade(tier, "high", [f"CRM tier '{crm_tier}' -> {tier}"], flags, base,
+                             signal=_signal_for(r, tier), action=action)
+
+    # 4. TIER-1 SIGNALS — scored by density.
+    t1 = r.get("tier1", {})
+    score = 0.0
+    reasons: List[str] = []
+
+    def add(key: str, listname: str, label: str) -> List[str]:
+        nonlocal score
+        hits = _all_in(hay, t1.get(listname, []))
+        if hits:
+            reasons.append(f"{label}: {', '.join(hits[:3])}")
+            score += LINKEDIN_WEIGHTS[key] * len(hits)
+        return hits
+
+    archetypes = add("buyer_archetype", "buyer_archetypes", "Buyer archetype")
+    verticals = add("vertical", "verticals", "Won-revenue vertical")
+    platform = add("platform_buyer", "platform_buyers", "Platform/API buyer")
+    provs = add("provider", "providers", "Model/cloud provider")
+    comps = add("company", "companies", "Major company")
+    senior = add("seniority", "seniority_keywords", "Decision-maker title")
+    add("function", "function_keywords", "Relevant function")
+    intents = add("intent", "intent_keywords", "Buying intent in the note")
+
+    if prior_contact:
+        reasons.append("Already known to us (CRM prior contact)")
+        score += LINKEDIN_WEIGHTS["reputation_or_prior"]
+
+    floor = t1.get("min_mutual_connections_signal", 5)
+    if mutual_connections is not None and mutual_connections >= floor:
+        reasons.append(f"{mutual_connections} mutual connections (>= {floor})")
+        score += LINKEDIN_WEIGHTS["mutuals"]
+
+    country = _any_in(hay, t1.get("tier1_countries", []))
+    if country:
+        reasons.append(f"Country we close in: '{country}'")
+        score += LINKEDIN_WEIGHTS["tier1_country"]
+
+    # A title alone is not a buyer. Tier-1 requires a WHO (archetype/vertical/
+    # platform/provider/company) — seniority and country only amplify it.
+    structural = bool(archetypes or verticals or platform or provs or comps)
+    if structural and (senior or intents or score >= 24.0):
+        return LinkedInGrade("tier-1", "high" if (senior and intents) else "medium",
+                             reasons, flags, score,
+                             signal=_signal_for(r, "tier-1"), action="Accept")
+
+    # 5. JOB SEEKER — not a buyer and not spam. Its own lane.
+    js = _any_in(hay, (r.get("job_seeker") or {}).get("keywords", []))
+    if js:
+        flags.append("Route to the talent rubric if the profile is strong; otherwise decline politely.")
+        return LinkedInGrade("tier-2", "medium", [f"Job seeker: '{js}'"], flags, 1.0,
+                             signal=_signal_for(r, "job_seeker"),
+                             action="Hold — talent lane, not a buyer")
+
+    # 6. SPAM — scored, never matched on a single phrase. Structural evidence only.
+    sp = r.get("spam", {})
+    spam_score = 0.0
+    spam_reasons: List[str] = []
+    vendors = _all_in(hay, sp.get("vendor_keywords", []))
+    if vendors:
+        spam_reasons.append(f"Cold vendor pitch: {', '.join(vendors[:3])}")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["vendor_phrase"] * len(vendors)
+    heads = _all_in(hay, sp.get("headline_keywords", []))
+    if heads:
+        spam_reasons.append(f"Spam headline pattern: {', '.join(heads[:3])}")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["spam_headline"] * len(heads)
+    templates = _all_in(hay, sp.get("template_fingerprints", []))
+    if templates:
+        spam_reasons.append(f"Mass-template note: '{templates[0]}'")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["template_note"] * len(templates)
+    if mutual_connections == 0:
+        spam_reasons.append("No mutual connections")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["no_mutuals"]
+    thin = sp.get("low_connection_threshold", 50)
+    if connections is not None and connections < thin:
+        spam_reasons.append(f"Thin network ({connections} < {thin} connections)")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["thin_network"]
+    if not note.strip() and (vendors or heads):
+        spam_reasons.append("No note on a cold invite")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["empty_note"]
+
+    threshold = float(sp.get("threshold", SPAM_THRESHOLD) or SPAM_THRESHOLD)
+    if spam_score >= threshold:
+        signal = _signal_for(r, "vendor") if vendors or heads else _signal_for(r, "trash")
+        return LinkedInGrade("trash", "high" if spam_score >= threshold * 1.6 else "medium",
+                             spam_reasons, flags, spam_score,
+                             signal=signal, action="Ignore")
+
+    # 7. DEFAULT — tier-2, low confidence, flagged. Never a silent tier-1 and
+    #    never a silent trash: an ambiguous stranger is surfaced, not deleted.
+    if spam_reasons:
+        flags.append(f"Some spam signal ({spam_score:.1f} < {threshold:g} threshold), "
+                     f"not enough to ignore: {'; '.join(spam_reasons[:2])}. "
+                     "Read the note before deciding.")
+    if reasons:
+        flags.append("ICP-adjacent but no decisive buyer signal; verify before upgrading.")
+        return LinkedInGrade("tier-2", "medium", reasons, flags, score,
+                             signal=_signal_for(r, "tier-2"), action="Review")
+    flags.append("No ICP hit and not obvious spam. Unknown stranger — decide by hand or leave pending.")
+    return LinkedInGrade("tier-2", "low", ["No decisive signal; defaulting to Tier-2"], flags,
+                         DEFAULT_TIER2_SCORE, signal=_signal_for(r, "tier-2"), action="Review")

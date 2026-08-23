@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -196,3 +197,168 @@ def load_contacts(cfg: Config) -> List[Contact]:
         except (OSError, ValueError):
             continue
     return contacts
+
+
+# --------------------------------------------------------------------------- #
+# LinkedIn inbound (invitations)
+# --------------------------------------------------------------------------- #
+
+@dataclass
+class Invitation:
+    """One pending inbound connection invitation.
+
+    Optional integer fields are Optional ON PURPOSE. `None` means "we did not
+    look" and must never be scored as evidence; `0` means "we looked and there
+    were none". Missing != 0 — the ingest rung decides which one you get, and
+    the LinkedIn archive export carries neither, so both stay None there.
+    """
+    name: str
+    public_url: str = ""
+    urn: str = ""
+    headline: str = ""
+    company: str = ""
+    location: str = ""
+    note: str = ""
+    sent_at: Optional[date] = None
+    mutual_connections: Optional[int] = None
+    connections: Optional[int] = None
+    invitation_type: str = "connect"   # connect | companyFollow | newsletterSubscribe
+    direction: str = "received"        # received | sent
+    source: str = "local-export"
+
+    def days_waiting(self, today: date) -> int:
+        if self.sent_at is None:
+            return 0
+        return max(0, (today - self.sent_at).days)
+
+    @property
+    def key(self) -> str:
+        from .grading import identity_key
+        return identity_key(self.public_url, self.urn, self.name)
+
+
+# The archive export stamps dates several ways depending on locale and category;
+# the live-DOM rung emits ISO. Normalizing exotic formats ("1 month ago") is the
+# ADAPTER's job — the engine accepts the handful of shapes that arrive verbatim.
+_INVITE_DATE_FORMATS = (
+    "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S %Z", "%m/%d/%y, %I:%M %p", "%m/%d/%Y", "%d %b %Y", "%b %d, %Y",
+)
+
+
+def _parse_date_loose(value: str) -> Optional[date]:
+    text = (value or "").strip().replace("Z", "").strip()
+    if not text:
+        return None
+    for fmt in _INVITE_DATE_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    try:  # last resort: a leading ISO date inside a longer stamp
+        return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _opt_int(value: str) -> Optional[int]:
+    """'' -> None (unknown), '0' -> 0 (looked, found none). The distinction matters."""
+    text = (value or "").strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+# LinkedIn's own archive uses spaced Title Case headers ("Sent At", "From",
+# "Inviter Profile URL"); the live-DOM rung writes snake_case. Accept both
+# rather than making the adapter guess which shape the engine wants.
+_INVITE_ALIASES = {
+    "name": ("name", "from", "inviter", "invitername", "fromname", "displayname"),
+    "public_url": ("public_url", "publicurl", "inviterprofileurl", "profileurl", "url", "linkedin"),
+    "urn": ("urn", "memberurn", "inviterurn", "entityurn"),
+    "headline": ("headline", "title", "occupation"),
+    "company": ("company", "organization", "currentcompany"),
+    "location": ("location", "geo", "country"),
+    "note": ("note", "message", "invitationmessage", "connectionrequestnote"),
+    "sent_at": ("sent_at", "sentat", "senttime", "date", "invitedat", "receivedat"),
+    "mutual_connections": ("mutual_connections", "mutualconnections", "mutuals", "sharedconnections"),
+    "connections": ("connections", "connectioncount", "networksize"),
+    "invitation_type": ("invitation_type", "invitationtype", "type"),
+    "direction": ("direction", "sentorreceived"),
+}
+
+
+def _pick(row: dict, field_name: str) -> str:
+    norm = {re.sub(r"[^a-z0-9]", "", (k or "").lower()): v for k, v in row.items()}
+    for alias in _INVITE_ALIASES[field_name]:
+        val = norm.get(re.sub(r"[^a-z0-9]", "", alias))
+        if val:
+            return str(val).strip()
+    return ""
+
+
+def load_invitations(cfg: Config) -> List[Invitation]:
+    """Read every `data/linkedin/*.csv` export. Received `connect` invites only.
+
+    Company follows and newsletter subscriptions are not invitations to triage —
+    LinkedIn returns them from the same surface and they would inflate every
+    count on the report if they were not dropped here.
+    """
+    li_dir = cfg.data_dir / "linkedin"
+    if not li_dir.is_dir():
+        return []
+    # Which RUNG produced this is a fact the adapter recorded, not something to
+    # infer from a filename. A month-old snapshot and a live read must not both
+    # print `source: local-export` on the report.
+    default_source = "local-export"
+    try:
+        default_source = json.loads(
+            (li_dir / ".ingest.json").read_text(encoding="utf-8")).get("source") or default_source
+    except (OSError, ValueError):
+        pass
+    out: List[Invitation] = []
+    seen: set = set()
+    for path in sorted(li_dir.glob("*.csv")):
+        if "connection" in path.name.lower() and "invitation" not in path.name.lower():
+            continue  # Connections.csv is the network, not the queue
+        source = default_source
+        try:
+            with path.open(encoding="utf-8-sig", newline="") as fh:
+                for row in csv.DictReader(fh):
+                    direction = (_pick(row, "direction") or "received").lower()
+                    if direction.startswith("sent") or direction == "outgoing":
+                        continue
+                    itype = (_pick(row, "invitation_type") or "connect").strip()
+                    if itype and itype.lower() not in ("connect", "connection", "invitation", ""):
+                        continue
+                    name = _pick(row, "name")
+                    url = _pick(row, "public_url")
+                    if not (name or url):
+                        continue
+                    inv = Invitation(
+                        name=name,
+                        public_url=url,
+                        urn=_pick(row, "urn"),
+                        headline=_pick(row, "headline"),
+                        company=_pick(row, "company"),
+                        location=_pick(row, "location"),
+                        note=_pick(row, "note"),
+                        sent_at=_parse_date_loose(_pick(row, "sent_at")),
+                        mutual_connections=_opt_int(_pick(row, "mutual_connections")),
+                        connections=_opt_int(_pick(row, "connections")),
+                        invitation_type=itype or "connect",
+                        direction="received",
+                        source=source,
+                    )
+                    # Same human, two identifier shapes (slug vs ACoAA... URN).
+                    # Keying on either alone double-counts them — see identity_key.
+                    if inv.key in seen:
+                        continue
+                    seen.add(inv.key)
+                    out.append(inv)
+        except (OSError, ValueError):
+            continue
+    return out
