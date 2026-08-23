@@ -13,6 +13,14 @@ ernest start    # every day
 
 The engine reads exported mail, CRM lists, sheets, sourcing targets, and Slack tasks straight from `data/`. No model, no OAuth, no middleman. This is the default, and it's enough to run the watch + remind + assign automations end to end.
 
+## When an app has no MCP and no API
+
+Some systems (LinkedIn is the standing example) offer neither. Those get an
+**ingest ladder** — cache, then the vendor's own data export, then the
+authenticated UI, then a partial CRM mirror, then an honest "unavailable" that
+writes nothing. See `docs/ingest-ladder.md` for the pattern, the shared CLI
+contract, and the rules that keep a stale snapshot from being reported as live.
+
 ## Three ways to get data in
 
 | Approach | Trust model | Setup |
@@ -93,6 +101,7 @@ Offline paths below are where an export *goes*. Folders that ship with sample da
 | Support triage | your exported tickets | Pylon + Zendesk + Intercom (Fin) + Slack |
 | Hiring pipeline | your exported candidates | Ashby + Calendar + Gmail/Slack + Notion |
 | Lead enrichment | your exported leads | Clay + Apollo + HubSpot |
+| LinkedIn invitations | `data/linkedin/*.csv` via `adapters/linkedin/ingest.py` | none — no LinkedIn MCP; the adapter drives a signed-in browser outside the gate |
 | Deal desk (contracts) | dry run only | HubSpot + Ironclad (via MATIC) + Notion |
 
 ## Northwind stack map (flexible / swappable)
