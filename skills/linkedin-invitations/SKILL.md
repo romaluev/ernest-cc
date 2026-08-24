@@ -114,6 +114,36 @@ Every rung reports which one produced the data, and that label rides through to
 Browser fallback within rungs 2–3: `ego-browser`, then Chrome over CDP, then
 raise. Same pattern for every future connector — see `docs/ingest-ladder.md`.
 
+### When a rung stops on something only a person can do
+
+Two of these exist, both on rung 2, and neither is a bug:
+
+1. **LinkedIn asks for the account password** to confirm "Request archive". The
+   window is already open in front of them. Say what it is asking for and wait —
+   do not fail the run, and do not tell them to go and do the whole export by
+   hand.
+2. **The archive is not ready yet.** Invitations return in about ten minutes;
+   Messages and Connections are in LinkedIn's 48-hour bucket. The request is
+   recorded in `data/linkedin/.archive-request.json` and a later run collects it.
+   Report this as "requested, arriving later", never as a failure.
+
+### When nothing automated can work
+
+Do not improvise instructions and do not ask them to figure it out.
+`docs/manual-fallback.md` holds the exact clicks with direct links:
+
+| Situation | Send them to |
+|---|---|
+| No rung reachable at all | §A — the export, one minute of clicking |
+| Not signed in | §B — sign in inside the window already open |
+| They want to look themselves | §C — direct links to every relevant page |
+| No Chromium browser on the machine | §D — it downloads one; if blocked, use §A |
+| Nothing works and they want to see it | §E — `--demo`, clearly labelled fake |
+
+Point at the section. Never paraphrase the steps from memory — the button names
+in that file were checked against LinkedIn's own documentation, and a wrong
+button name costs more trust than saying nothing.
+
 ## Watch half
 
 ```bash
@@ -211,16 +241,39 @@ unearned autonomy, not excessive caution.
 
 ## Output
 
-Canonical reminder card (`ernest-watch` format), id `linkedin-invitations`, plus
-`linkedin-invitations--<date>.csv` with the full population. Tier-1 and hold get
-their own sections up to `max_named`; everything else is a `[BUCKET]` row with a
-count and a pointer to the sidecar. **Approval is per bucket** — that is what
-keeps the queue reviewable at six thousand rows.
+A card that **leads with a TL;DR**, then names people in the order they cost
+something, plus `linkedin-invitations--<date>.csv` carrying the full population
+and every internal number behind each call.
 
-Extra bullets, kebab-short: `- signal:` (HubSpot `linkedin_message_signal`
-verbatim) · `- channel: Connection Request` · `- linkedin: <url>` ·
-`- note: "<invite text>"` · `- checked:` · `- crm: PROPOSE <update>`. Every card
-and chat summary ends with:
+```
+## TL;DR
+
+- **6,780 pending invitations. 12 need you.**
+- **Accept (9)** — 3 investors, 4 enterprise buyers, 2 creators.
+- **Your call (3)** — 2 journalists, 1 competitor. These never resolve on their own.
+- **Ignore (4,190)** — 3,001 sellers, 890 consultants, 299 cold applicants.
+- Nothing is accepted, ignored or reported until you say so.
+
+## Accept (9)
+
+**1. Ken Duarte — Marlowe Capital**
+Investor — general partner at Marlowe Capital. Waiting 13d.
+> "Following your category closely, would love to connect."
+Do: Accept · https://www.linkedin.com/in/...
+```
+
+Sections in order: TL;DR · Accept · Your call · Talent lane · Spam · Worth
+identifying · Everything else. Tier-1 and hold are named up to `max_named`;
+everything else is a count and a pointer to the sidecar. **Approval is per
+section** — that is what keeps six thousand rows reviewable.
+
+**Write it in English, not in fields.** No `value: critical (118)`, no
+`signal: Positive`, no `checked:`, no `thread_id`, and no semicolon-joined list
+of every rubric list that matched. Those belong in the CSV, where the `lane`,
+`summary`, `score` and `why` columns carry them for anyone auditing a call. The
+card gets one plain sentence: who they are, and what they want.
+
+Every card and chat summary ends with:
 
 `Reply draft these when you want me to prepare actions.`
 

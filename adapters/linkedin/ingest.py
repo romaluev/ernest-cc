@@ -246,7 +246,19 @@ def parse_archive(zip_path: Path) -> List[Dict[str, str]]:
 
 
 def _request_archive(drv: browser.Driver) -> str:
-    """Tick Connections + Invitations + Messages and submit. Returns a status word."""
+    """Tick Connections + Invitations + Messages and submit. Returns a status word.
+
+    Two things about this page that the automation cannot get around, both
+    documented by LinkedIn itself:
+
+      * After "Request archive" it asks for the ACCOUNT PASSWORD and a "Done"
+        button. There is no way to fill that and there should not be. The caller
+        detects `needs-password` and waits for the person to type it into the
+        window that is already open in front of them.
+      * The categories have two different SLAs. Invitations come back in about
+        ten minutes; **Messages are in the 48-hour bucket**. Blocking on that is
+        not an option, so the request is recorded and a later run collects it.
+    """
     drv.goto(DOWNLOAD_MY_DATA)
     time.sleep(4)
     return drv.evaluate(r"""
@@ -272,6 +284,63 @@ def _request_archive(drv: browser.Driver) -> str:
       return 'requested';
     })()
     """) or "unknown"
+
+
+_PASSWORD_PROBE = r"""
+(() => {
+  const box = document.querySelector('input[type=password]');
+  if (!box) return 'no';
+  const rect = box.getBoundingClientRect();
+  return (rect.width > 0 && rect.height > 0) ? 'yes' : 'no';
+})()
+"""
+
+
+def _await_password(drv: browser.Driver, *, minutes: float = 5.0) -> bool:
+    """LinkedIn confirms an export request with the account password.
+
+    Nothing here can or should type it. The browser window is already open and
+    on the right screen, so the honest move is to say exactly what it is asking
+    for and wait. Unattended runs skip this and pick the request up next time.
+    """
+    if str(drv.evaluate(_PASSWORD_PROBE) or "no") != "yes":
+        return True
+    if os.environ.get("LI_UNATTENDED", "").strip() in ("1", "true", "yes"):
+        return False
+    for line in ("",
+                 "  LinkedIn is asking for your account password to confirm the",
+                 "  export request. Type it into the window that is already open",
+                 "  and press Done. Nothing else is needed.",
+                 f"  Waiting up to {minutes:.0f} minutes...", ""):
+        print(line, file=sys.stderr, flush=True)
+    deadline = time.time() + minutes * 60
+    while time.time() < deadline:
+        time.sleep(4.0)
+        if str(drv.evaluate(_PASSWORD_PROBE) or "no") != "yes":
+            print("  Thanks — request submitted.\n", file=sys.stderr, flush=True)
+            return True
+    return False
+
+
+def _archive_state(profile: Path) -> Dict[str, Any]:
+    path = profile / "data" / "linkedin" / ".archive-request.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _note_archive_request(profile: Path) -> None:
+    """Remember that an export was asked for, so a later run collects it.
+
+    Invitations come back in about ten minutes. Messages are in LinkedIn's
+    48-hour bucket. Waiting out 48 hours in a foreground process is not a
+    design; recording the request and checking on the next scheduled run is.
+    """
+    path = profile / "data" / "linkedin" / ".archive-request.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"requested_at": datetime.now(timezone.utc).isoformat()}),
+                    encoding="utf-8")
 
 
 def _download_archive(drv: browser.Driver, dest: Path) -> Optional[Path]:
@@ -401,6 +470,13 @@ def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float
                 "not signed in to LinkedIn in this browser profile")
         _capture_session(li_dir.parent.parent, drv)
         status = _request_archive(drv)
+        if status == "requested":
+            if not _await_password(drv, minutes=5.0):
+                raise browser.BrowserUnavailable(
+                    "the export needs your LinkedIn password to confirm. Run this "
+                    "again where you can see the browser window, or follow "
+                    "docs/manual-fallback.md — it takes about a minute.")
+            _note_archive_request(li_dir.parent.parent)
         if status in ("no-controls", "ticked-no-submit"):
             raise browser.BrowserUnavailable(
                 f"Archive request page did not behave as expected ({status}). "
@@ -418,9 +494,10 @@ def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float
             drv.goto(DOWNLOAD_MY_DATA)
             time.sleep(4)
         raise browser.BrowserUnavailable(
-            f"Archive still not ready after {wait_minutes:.0f}m. LinkedIn says specific "
-            "categories arrive 'within minutes' but the full archive can take 24h. "
-            "Re-run later, or pass --from-archive once the mail lands."
+            f"Archive not ready yet after {wait_minutes:.0f}m. This is normal and not a "
+            "failure: LinkedIn returns Invitations in about ten minutes but puts "
+            "Messages in a 48-hour bucket. The request is recorded — the next "
+            "scheduled run collects it without asking again. Nothing more to do."
         )
     finally:
         drv.close()
@@ -586,7 +663,7 @@ def ingest(profile: Path, *, only_rung: Optional[int] = None, zip_path: Optional
                                              wait_minutes=wait_minutes, prefer=prefer),
                     3: lambda: rung3_live(li_dir, limit=limit, prefer=prefer),
                     4: lambda: rung4_hubspot(li_dir, data_dir)}[rung]()
-            rows = _dedupe(rows)
+            rows = _dedupe(rows or [])
             if rows:
                 # The export carries messages only if that box was ticked, and
                 # never carries archived/spam. When a cloud rung is configured

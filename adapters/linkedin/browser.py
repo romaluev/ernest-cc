@@ -361,16 +361,18 @@ def ensure_signed_in(drv: "Driver", *, minutes: float = 10.0,
                      interactive: Optional[bool] = None) -> bool:
     """Return True once the browser holds a LinkedIn session.
 
-    Interactive: opens the login page and waits, checking every few seconds, so
-    the caller does not have to be re-run afterwards. Non-interactive (cron,
-    launchd, CI): returns immediately so the ladder falls to the next rung
-    instead of hanging a scheduled job on a login prompt that nobody will see.
+    Waits by default. The earlier version decided by `stdin.isatty()`, which is
+    wrong for the case that matters most: run through an agent, stdin is a pipe,
+    so it never waited and every rung failed with "not signed in" while a browser
+    window sat open on the login page. A scheduled job opts out explicitly with
+    LI_UNATTENDED=1 — that is the caller's decision to make, not something to
+    infer from the shape of a file descriptor.
     """
     state = login_state(drv)
     if state == "in":
         return True
     if interactive is None:
-        interactive = sys.stdin.isatty() and sys.stderr.isatty()
+        interactive = os.environ.get("LI_UNATTENDED", "").strip() not in ("1", "true", "yes")
     if not interactive:
         return False
 

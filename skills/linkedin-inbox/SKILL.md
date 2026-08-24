@@ -83,6 +83,36 @@ Files are read from an allow-list. A real export drops `Invitations.csv`,
 `Connections.csv` and `messages.csv` in one folder, and a deny-list once loaded
 messages as invitations.
 
+### When a rung stops on something only a person can do
+
+Two of these exist, both on rung 2, and neither is a bug:
+
+1. **LinkedIn asks for the account password** to confirm "Request archive". The
+   window is already open in front of them. Say what it is asking for and wait —
+   do not fail the run, and do not tell them to go and do the whole export by
+   hand.
+2. **The archive is not ready yet.** Invitations return in about ten minutes;
+   Messages and Connections are in LinkedIn's 48-hour bucket. The request is
+   recorded in `data/linkedin/.archive-request.json` and a later run collects it.
+   Report this as "requested, arriving later", never as a failure.
+
+### When nothing automated can work
+
+Do not improvise instructions and do not ask them to figure it out.
+`docs/manual-fallback.md` holds the exact clicks with direct links:
+
+| Situation | Send them to |
+|---|---|
+| No rung reachable at all | §A — the export, one minute of clicking |
+| Not signed in | §B — sign in inside the window already open |
+| They want to look themselves | §C — direct links to every relevant page |
+| No Chromium browser on the machine | §D — it downloads one; if blocked, use §A |
+| Nothing works and they want to see it | §E — `--demo`, clearly labelled fake |
+
+Point at the section. Never paraphrase the steps from memory — the button names
+in that file were checked against LinkedIn's own documentation, and a wrong
+button name costs more trust than saying nothing.
+
 ## Watch half
 
 ```bash

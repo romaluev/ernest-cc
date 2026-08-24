@@ -267,107 +267,13 @@ if __name__ == "__main__":
 # --------------------------------------------------------------------------- #
 # Installer
 # --------------------------------------------------------------------------- #
-write("install.sh", '''#!/usr/bin/env bash
-# One-command setup for the standalone LinkedIn inbound triage bundle.
-#
-#   ./install.sh              install and verify (no system changes)
-#   ./install.sh --daily      also add a daily 08:00 crontab entry
-#
-# No pip, no npm, no vendor SDK. Python standard library only.
-set -uo pipefail
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Scheduling edits the user's crontab, so it is OPT-IN. Handing someone a tool
-# that quietly installs a daily job is not acceptable, however useful it is.
-DO_CRON=0
-[ "${1:-}" = "--daily" ] && DO_CRON=1
+# The installer is a real shell script under scripts/bundle-docs/, for the same
+# reason as the docs: a shell script escaped inside a Python string literal is
+# unreviewable, and this one now decides what gets written outside the folder.
+write("install.sh",
+      (Path(__file__).resolve().parent / "bundle-docs" / "install.sh")
+      .read_text(encoding="utf-8"), execute=True)
 
-GAPS=()
-step() { printf '  [%s] %s\\n' "$1" "$2"; }
-gap()  { GAPS+=("$1"); }
-
-echo ""
-if [ -f "$HERE/BUILD.txt" ]; then
-  echo "LinkedIn inbound triage — $(sed -n 1p "$HERE/BUILD.txt")"
-  sed -n '2,4p' "$HERE/BUILD.txt" | sed 's/^/  /'
-else
-  echo "LinkedIn inbound triage — setup"
-fi
-echo "==============================="
-
-command -v python3 >/dev/null 2>&1 || { echo "python3 not found. Install Python 3.9+." >&2; exit 10; }
-PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
-python3 -c 'import sys;sys.exit(0 if sys.version_info>=(3,9) else 1)' \\
-  || { echo "python3 $PYV is too old (need 3.9+)." >&2; exit 10; }
-step ok "python3 $PYV"
-
-chmod +x "$HERE/linkedin_triage.py" "$HERE/adapters/linkedin"/*.py 2>/dev/null || true
-
-RUNGS="$(python3 "$HERE/adapters/linkedin/ingest.py" --profile-dir "$HERE" --doctor --json 2>/dev/null \\
-  | python3 -c 'import json,sys
-try: print(",".join(str(r) for r in json.load(sys.stdin)["results"]["rungs_reachable"]))
-except Exception: print("")')"
-if [ -n "$RUNGS" ]; then
-  step ok "LinkedIn reachable via rung(s) $RUNGS"
-else
-  step "--" "no way to reach LinkedIn yet"
-  gap "Start Chrome with --remote-debugging-port=9222 on the profile signed in to LinkedIn, OR download your data export (Settings -> Data Privacy -> Get a copy of your data -> tick Invitations) and run: python3 linkedin_triage.py --from-archive <zip>"
-fi
-
-# Prove the pipeline works using the fictional examples in a scratch directory.
-# data/ ships empty on purpose, so this must never write a report into it.
-DEMO_OUT="$(python3 "$HERE/linkedin_triage.py" --demo 2>&1)"
-if printf '%s' "$DEMO_OUT" | grep -q "invitations.md"; then
-  step ok "invitations pipeline verified (on the examples)"
-else
-  step "--" "the invitations pipeline produced nothing"
-  gap "Run \\`python3 linkedin_triage.py --demo\\` and read the error."
-fi
-if printf '%s' "$DEMO_OUT" | grep -q "messages.md"; then
-  step ok "DM pipeline verified (on the examples)"
-else
-  step "--" "the DM pipeline produced nothing"
-  gap "Run \\`python3 linkedin_triage.py --demo\\` and read the error."
-fi
-
-if ls "$HERE"/data/linkedin/*.csv >/dev/null 2>&1; then
-  step ok "your LinkedIn export is loaded"
-else
-  step "--" "no LinkedIn data yet (this is expected on a fresh install)"
-  gap "Get your export: LinkedIn -> Settings -> Data Privacy -> Get a copy of your data -> tick Invitations and Messages. Then: python3 linkedin_triage.py --from-archive ~/Downloads/<file>.zip"
-fi
-
-for t in "$HERE"/tests/test_*.py; do
-  [ -e "$t" ] || continue
-  PYTHONPATH="$HERE" python3 "$t" >/dev/null 2>&1 \\
-    && step ok "$(basename "$t" .py) passes" \\
-    || { step "--" "$(basename "$t" .py) FAILED"; gap "A guarantee is broken: PYTHONPATH=$HERE python3 $t"; }
-done
-
-if [ "$DO_CRON" -eq 0 ]; then
-  step ok "no schedule installed (run ./install.sh --daily if you want one)"
-fi
-if [ "$DO_CRON" -eq 1 ]; then
-  LINE="0 8 * * 1-5 cd \\"$HERE\\" && python3 \\"$HERE/linkedin_triage.py\\" >> \\"$HERE/triage.log\\" 2>&1"
-  if crontab -l 2>/dev/null | grep -Fq "$HERE/linkedin_triage.py"; then
-    step ok "daily 08:00 job already scheduled"
-  elif (crontab -l 2>/dev/null; echo "$LINE") | crontab - 2>/dev/null; then
-    step ok "scheduled daily at 08:00 (remove with: crontab -e)"
-  else
-    step "--" "could not write crontab"
-    gap "Add this line yourself with \\`crontab -e\\`: $LINE"
-  fi
-fi
-
-echo ""
-if [ "${#GAPS[@]}" -eq 0 ]; then
-  echo "Ready. Reports land in reports/latest/ (invitations.md, messages.md)."
-  echo "Nothing is ever accepted, ignored, or reported without your approval."
-  exit 0
-fi
-echo "Ready, with ${#GAPS[@]} thing(s) still open:"
-for g in "${GAPS[@]}"; do echo "  - $g"; done
-exit 1
-''', execute=True)
 
 # --------------------------------------------------------------------------- #
 # Human README
@@ -380,7 +286,8 @@ _DOCS = Path(__file__).resolve().parent / "bundle-docs"
 for _name in ("README.md", "AGENTS.md"):
     write(_name, (_DOCS / _name).read_text(encoding="utf-8")
           .replace("__VERSION__", VERSION))
-write("docs/cloud-rung.md", (_DOCS / "cloud-rung.md").read_text(encoding="utf-8"))
+for _doc in ("cloud-rung.md", "manual-fallback.md"):
+    write(f"docs/{_doc}", (_DOCS / _doc).read_text(encoding="utf-8"))
 
 
 write("ernest.yaml", '''# Policy for the standalone LinkedIn triage bundle.

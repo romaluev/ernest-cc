@@ -194,7 +194,7 @@ VERIFY_REPORTS="$(mktemp -d)"
 export LI_REPORTS_DIR="$VERIFY_REPORTS"
 find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 VERIFY_FAIL=0
-DEMO_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --demo 2>&1 )" || {
+DEMO_OUT="$( cd "$STAGE" && LI_UNATTENDED=1 python3 linkedin_triage.py --demo 2>&1 )" || {
   echo "  FAIL: the bundle cannot produce a report" >&2
   printf '%s\n' "$DEMO_OUT" | tail -12 >&2
   VERIFY_FAIL=1
@@ -221,7 +221,7 @@ fi
 # does not exist.
 # The REAL path (not --demo) must run both halves. A bundle where DMs only work
 # in demo mode passes every other check here and is dead on arrival.
-REAL_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --from-archive tests/fixtures/linkedin-archive.zip 2>&1 )"
+REAL_OUT="$( cd "$STAGE" && LI_UNATTENDED=1 python3 linkedin_triage.py --from-archive tests/fixtures/linkedin-archive.zip 2>&1 )"
 for want in invitations messages; do
   if printf '%s' "$REAL_OUT" | grep -q "$want.md"; then
     say "real path produces $want.md"
@@ -248,7 +248,7 @@ rm -rf "$STAGE/reports" "$STAGE/.state" "$STAGE/data/linkedin"/*.csv \
 # A first run with no data must explain itself and exit 3, not crash or lie.
 # `set -e` would abort here on the exit code we are deliberately asserting.
 rc=0
-( cd "$STAGE" && python3 linkedin_triage.py >/dev/null 2>&1 ) || rc=$?
+( cd "$STAGE" && LI_UNATTENDED=1 python3 linkedin_triage.py >/dev/null 2>&1 ) || rc=$?
 if [ "$rc" -eq 3 ]; then
   say "a first run with no data explains itself (exit 3)"
 else

@@ -69,6 +69,12 @@ It tries, in order, and tells you which one worked. You do not choose.
 4. A HubSpot export, if you have one. Partial, and it says so.
 5. Nothing — in which case it says so and invents no one.
 
+Two things about the export worth knowing, because they look like faults and are
+not: LinkedIn asks for your **password** to confirm the request (there is no way
+around that, and there should not be), and while **Invitations** come back in
+about ten minutes, **Messages** sit in LinkedIn's **48-hour** bucket. The tool
+records the request and collects it on a later run — you do nothing.
+
 If the export mail has already landed and you would rather just hand it over:
 
 ```bash
@@ -152,5 +158,8 @@ signed in to. See `docs/cloud-rung.md`.
 - Writes nothing outside this folder except your reports. Delete the folder and
   every trace is gone.
 - `tests/` asserts all of the above, and `./install.sh` runs them.
+
+If anything ever gets stuck, `docs/manual-fallback.md` has the exact clicks —
+direct links, real button names, about a minute of work.
 
 For agents: read `AGENTS.md`.

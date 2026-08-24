@@ -356,7 +356,8 @@ def _linkedin_card(cfg: Config, analyzed, csv_path: Path,
         "",
         "## TL;DR",
         "",
-        f"- **{len(analyzed)} pending invitations. {need} need you.**",
+        f"- **{len(analyzed)} pending invitations. "
+        f"{need} {'needs' if need == 1 else 'need'} you.**",
     ]
     if accept:
         lines.append(f"- **Accept ({len(accept)})** — {_lane_phrase([g for _, g, _ in accept])}.")
@@ -642,7 +643,8 @@ def _linkedin_dm_card(cfg: Config, analyzed, csv_path: Path, prev: Dict[str, obj
     ]
     # The lead is what it costs to keep ignoring this, in the order it costs.
     todo = len(escalations) + len(owed_us) + len(waiting) + len(holds)
-    lines.append(f"- **{len(analyzed)} threads. {todo} need you.**")
+    lines.append(f"- **{len(analyzed)} threads. "
+                 f"{todo} {'needs' if todo == 1 else 'need'} you.**")
     if escalations:
         lines.append(f"- **Answer personally ({len(escalations)})** — "
                      + ", ".join(f"{c.counterparty or 'Unknown'}" for c, _, _ in escalations[:3])

@@ -163,7 +163,12 @@ before suppression is how a competitor or a journalist ends up accepted.
   through the browser is ~600 automated page loads against a signed-in session,
   which is exactly what gets accounts restricted. The export returns the whole
   queue in one download; use it.
-- **Write nothing outside this folder** except `~/Documents/LinkedIn-Inbound/`.
+- **When something genuinely cannot be automated, hand-hold — do not delegate.**
+  `docs/manual-fallback.md` is the exact clicks, with direct links, for every
+  step a person could ever be asked to take. Point at the specific section; never
+  say "export your data from LinkedIn" and leave them to work it out.
+- **Write nothing outside this folder** except `~/Documents/LinkedIn-Inbound/`,
+  and two symlinks in `~/.claude/skills/` that `./install.sh --uninstall` removes.
   Deleting this folder must remove every trace of the tool.
 
 ## 8. When it breaks — diagnosis by symptom
@@ -173,6 +178,20 @@ Run this first; it answers most of them:
 ```bash
 python3 adapters/linkedin/ingest.py --doctor
 ```
+
+**LinkedIn asks for a password mid-export**
+Expected, and documented by LinkedIn: "Request archive" is confirmed with the
+account password and a **Done** button. Nothing here can or should type it. The
+browser window is already open on the right screen — say exactly what it is
+asking for and wait. `_await_password` does this for five minutes. Unattended
+runs (`LI_UNATTENDED=1`) skip it and the next run picks the request up.
+
+**"Archive not ready yet" — this is not a failure**
+LinkedIn returns **Invitations in about ten minutes** and puts **Messages and
+Connections in a 48-hour bucket**. The request is recorded in
+`data/linkedin/.archive-request.json`; the next scheduled run finds the ready
+download and collects it without asking anyone again. Do not re-request in a
+loop, and do not report this as broken.
 
 **"Could not reach LinkedIn, and there is no cached data"**
 Every rung failed. `--doctor` prints `rungs_reachable`. Empty means no browser
