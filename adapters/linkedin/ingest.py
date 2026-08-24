@@ -312,6 +312,75 @@ def _save_messages(li_dir: Path, text: str, dry_run: bool) -> int:
     return max(0, len(text.strip().splitlines()) - 1)
 
 
+def _capture_session(profile: Path, drv) -> None:
+    """Stash the li_at cookie for the cloud rung. Best effort, never fatal."""
+    try:
+        import cloud                                    # noqa: PLC0415
+        value = browser.session_cookie(drv)
+        if value:
+            cloud.cache_cookie(profile, value)
+    except Exception:                                   # noqa: BLE001
+        pass
+
+
+_PB_FIELDS = ["CONVERSATION ID", "CONVERSATION TITLE", "FROM", "SENDER PROFILE URL",
+              "TO", "RECIPIENT PROFILE URLS", "DATE", "SUBJECT", "CONTENT", "FOLDER"]
+
+
+def cloud_messages(profile: Path, li_dir: Path) -> int:
+    """Fill messages.csv from the cloud rung. Returns the row count, 0 if skipped.
+
+    Only ever a SUPPLEMENT. The export is the source of truth for the invitation
+    queue — no third party reads pending received invitations, and none needs to,
+    because one download does. What this adds is the folders the export flattens:
+    archived, unread, InMail, spam. That is where a dropped request hides.
+    """
+    try:
+        import cloud                                    # noqa: PLC0415
+    except ImportError:
+        return 0
+    if not cloud.available(profile):
+        return 0
+    cookie = cloud.cached_cookie(profile)
+    if not cookie:
+        return 0
+    try:
+        rows = cloud.scrape_inbox(profile, cookie)
+    except Exception as exc:                            # noqa: BLE001
+        print(f"  cloud rung: {exc}", file=sys.stderr)
+        return 0
+    if not rows:
+        return 0
+    out = [",".join(_PB_FIELDS)]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_PB_FIELDS, extrasaction="ignore")
+    writer.writeheader()
+    for r in rows:
+        writer.writerow({
+            "CONVERSATION ID": r.get("threadId") or r.get("conversationId") or "",
+            "CONVERSATION TITLE": r.get("threadTitle") or "",
+            "FROM": r.get("firstnameFrom") and
+                    f"{r.get('firstnameFrom')} {r.get('lastnameFrom', '')}".strip()
+                    or r.get("from") or r.get("senderName") or "",
+            "SENDER PROFILE URL": r.get("senderUrl") or r.get("profileUrl") or "",
+            "TO": r.get("to") or r.get("recipientName") or "",
+            "RECIPIENT PROFILE URLS": r.get("recipientUrl") or "",
+            "DATE": _iso(str(r.get("messageDate") or r.get("timestamp") or "")),
+            "SUBJECT": r.get("subject") or "",
+            "CONTENT": r.get("message") or r.get("content") or "",
+            # The folder is the point of this rung; without it archived and spam
+            # threads look identical to inbox ones and the dedup collapses them.
+            "FOLDER": (r.get("folder") or r.get("inboxFilter") or "INBOX").upper(),
+        })
+    del out
+    li_dir.mkdir(parents=True, exist_ok=True)
+    path = li_dir / "messages.csv"
+    tmp = path.with_suffix(".csv.tmp")
+    tmp.write_text(buf.getvalue(), encoding="utf-8")
+    os.replace(tmp, path)
+    return len(rows)
+
+
 def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float,
                   prefer: str) -> Optional[List[Dict[str, str]]]:
     if zip_path:
@@ -330,6 +399,7 @@ def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float
         if not browser.ensure_signed_in(drv):
             raise browser.BrowserUnavailable(
                 "not signed in to LinkedIn in this browser profile")
+        _capture_session(li_dir.parent.parent, drv)
         status = _request_archive(drv)
         if status in ("no-controls", "ticked-no-submit"):
             raise browser.BrowserUnavailable(
@@ -406,6 +476,7 @@ def rung3_live(li_dir: Path, *, limit: int, prefer: str) -> Optional[List[Dict[s
         if not browser.ensure_signed_in(drv):
             raise browser.BrowserUnavailable(
                 "not signed in to LinkedIn in this browser profile")
+        _capture_session(li_dir.parent.parent, drv)
         rows: List[Dict[str, str]] = []
         seen: set = set()
         stalled = 0
@@ -517,6 +588,14 @@ def ingest(profile: Path, *, only_rung: Optional[int] = None, zip_path: Optional
                     4: lambda: rung4_hubspot(li_dir, data_dir)}[rung]()
             rows = _dedupe(rows)
             if rows:
+                # The export carries messages only if that box was ticked, and
+                # never carries archived/spam. When a cloud rung is configured
+                # and we came back with no messages, ask it — the DM half of the
+                # report is worth as much as the invitation half.
+                if not globals().get("_LAST_MESSAGE_ROWS") and not dry_run:
+                    got = cloud_messages(profile, li_dir)
+                    if got:
+                        globals()["_LAST_MESSAGE_ROWS"] = got
                 path = _write_rows(li_dir, rows, rung, dry_run)
                 result = {"ok": True, "rung": rung, "source": RUNGS[rung],
                           "rows": len(rows), "path": str(path), "dry_run": dry_run,
@@ -542,6 +621,12 @@ def doctor(profile: Path) -> Tuple[Dict[str, Any], int]:
     state = _state(li)
     drivers = browser.available_drivers()
     rungs: List[int] = []
+    cloud_on = False
+    try:
+        import cloud                                    # noqa: PLC0415
+        cloud_on = cloud.available(profile)
+    except ImportError:
+        pass
     csvs = sorted(li.glob("*.csv")) if li.is_dir() else []
     age_h = ((time.time() - max(p.stat().st_mtime for p in csvs)) / 3600.0) if csvs else None
     if csvs:
@@ -553,6 +638,9 @@ def doctor(profile: Path) -> Tuple[Dict[str, Any], int]:
     results = {
         "drivers": drivers,
         "rungs_reachable": sorted(set(rungs)),
+        # Optional, and reported either way so nobody has to guess whether the
+        # key took. Off is a normal state, not a fault.
+        "cloud_rung": "PhantomBuster configured" if cloud_on else "not configured",
         "queue_rows": state.get("rows"),
         "queue_age_hours": round(age_h, 1) if age_h is not None else None,
         "last_ingest": state or None,
