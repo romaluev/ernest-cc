@@ -28,8 +28,16 @@ gap()  { GAPS+=("$1"); }
 # --- uninstall: everything this ever wrote outside its own folder ------------
 if [ "$UNINSTALL" -eq 1 ]; then
   echo ""
-  crontab -l 2>/dev/null | grep -Fv "$HERE/linkedin_triage.py" | crontab - 2>/dev/null \
-    && step ok "schedule removed" || step "--" "no schedule to remove"
+  PLIST="$HOME/Library/LaunchAgents/com.linkedin-inbound.triage.plist"
+  if [ -f "$PLIST" ]; then
+    launchctl unload "$PLIST" >/dev/null 2>&1
+    rm -f "$PLIST" && step ok "schedule removed"
+  elif [ "$(uname)" != "Darwin" ] && crontab -l 2>/dev/null | grep -Fq "$HERE/linkedin_triage.py"; then
+    crontab -l 2>/dev/null | grep -Fv "$HERE/linkedin_triage.py" | crontab - 2>/dev/null \
+      && step ok "schedule removed"
+  else
+    step "--" "no schedule to remove"
+  fi
   for s in linkedin-invitations linkedin-inbox; do
     if [ -L "$SKILL_DIR/$s" ]; then rm -f "$SKILL_DIR/$s"; step ok "unlinked skill $s"; fi
   done
@@ -99,15 +107,48 @@ for t in "$HERE"/tests/test_*.py; do
 done
 
 # --- schedule ----------------------------------------------------------------
+# launchd on macOS, cron elsewhere. NOT cron on macOS: `crontab` there trips a
+# Full Disk Access prompt and then blocks on it forever with no output, which is
+# indistinguishable from a hang and is exactly the thing nobody should have to
+# debug. A per-user LaunchAgent needs no special permission.
+PLIST="$HOME/Library/LaunchAgents/com.linkedin-inbound.triage.plist"
 if [ "$DO_CRON" -eq 1 ]; then
-  LINE="0 8 * * 1-5 cd \"$HERE\" && LI_UNATTENDED=1 python3 \"$HERE/linkedin_triage.py\" >> \"$HERE/triage.log\" 2>&1"
-  if crontab -l 2>/dev/null | grep -Fq "$HERE/linkedin_triage.py"; then
-    step ok "daily 08:00 run already scheduled"
-  elif (crontab -l 2>/dev/null; echo "$LINE") | crontab - 2>/dev/null; then
-    step ok "scheduled weekdays at 08:00 (remove: ./install.sh --uninstall)"
+  if [ "$(uname)" = "Darwin" ]; then
+    mkdir -p "$HOME/Library/LaunchAgents" 2>/dev/null
+    {
+      printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
+      printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+      printf '%s\n' '<plist version="1.0"><dict>'
+      printf '%s\n' '  <key>Label</key><string>com.linkedin-inbound.triage</string>'
+      printf '%s\n' '  <key>ProgramArguments</key><array>'
+      printf '%s\n' '    <string>/bin/sh</string><string>-c</string>'
+      printf '    <string>cd %s &amp;&amp; LI_UNATTENDED=1 python3 %s/linkedin_triage.py &gt;&gt; %s/triage.log 2&gt;&amp;1</string>\n' "'$HERE'" "'$HERE'" "'$HERE'"
+      printf '%s\n' '  </array>'
+      printf '%s\n' '  <key>StartCalendarInterval</key><array>'
+      for d in 1 2 3 4 5; do
+        printf '    <dict><key>Weekday</key><integer>%s</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>\n' "$d"
+      done
+      printf '%s\n' '  </array>'
+      printf '%s\n' '  <key>RunAtLoad</key><false/>'
+      printf '%s\n' '</dict></plist>'
+    } > "$PLIST"
+    launchctl unload "$PLIST" >/dev/null 2>&1
+    if launchctl load "$PLIST" >/dev/null 2>&1; then
+      step ok "scheduled weekdays at 08:00 (remove: ./install.sh --uninstall)"
+    else
+      step "--" "could not load the LaunchAgent"
+      gap "Run it yourself when you want a report: python3 linkedin_triage.py"
+    fi
   else
-    step "--" "could not write the crontab"
-    gap "macOS may need Terminal added under System Settings -> Privacy & Security -> Full Disk Access. Or skip it: ./install.sh --no-daily"
+    LINE="0 8 * * 1-5 cd \"$HERE\" && LI_UNATTENDED=1 python3 \"$HERE/linkedin_triage.py\" >> \"$HERE/triage.log\" 2>&1"
+    if crontab -l 2>/dev/null | grep -Fq "$HERE/linkedin_triage.py"; then
+      step ok "daily 08:00 run already scheduled"
+    elif (crontab -l 2>/dev/null; echo "$LINE") | crontab - 2>/dev/null; then
+      step ok "scheduled weekdays at 08:00 (remove: ./install.sh --uninstall)"
+    else
+      step "--" "could not write the crontab"
+      gap "Run it yourself when you want a report: python3 linkedin_triage.py"
+    fi
   fi
 else
   step ok "no schedule installed (--no-daily)"
@@ -126,7 +167,7 @@ if [ "$RC" -eq 0 ]; then
   step ok "first report written to ~/Documents/LinkedIn-Inbound/latest/"
 else
   step "--" "no report yet — nothing was invented to fill the gap"
-  gap "Run \`python3 linkedin_triage.py\` in a terminal you are watching. A browser opens on the LinkedIn sign-in page; sign in once and it finishes on its own."
+  gap "Run \`python3 linkedin_triage.py\`. A browser opens on the LinkedIn sign-in page; sign in once and it finishes on its own. Prefer to do it by hand? docs/manual-fallback.md section A, about a minute."
 fi
 
 echo ""
