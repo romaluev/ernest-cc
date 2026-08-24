@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .config import Config
 
@@ -517,6 +517,19 @@ def _owner_from_memory(cfg: Config) -> str:
     return ""
 
 
+_LAST_OWNER = ""
+_LAST_OWNER_SOURCE = "unknown"
+
+
+def last_owner() -> Tuple[str, str]:
+    """Who the last load treated as "us", and how that was decided.
+
+    Reported on the card because getting it wrong inverts every message in the
+    inbox while still producing a report that looks entirely normal.
+    """
+    return _LAST_OWNER, _LAST_OWNER_SOURCE
+
+
 def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> List[Conversation]:
     """Read `data/linkedin/messages*.csv` into threads.
 
@@ -550,9 +563,25 @@ def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> 
     if not rows:
         return []
 
+    # Check BOTH sides. Someone who only ever receives is still the owner — an
+    # inbox full of unanswered mail is exactly the case this has to handle.
+    appearing = {(_pick_msg(r, "sender") or "").strip().lower() for r in rows}
+    appearing |= {(_pick_msg(r, "recipient") or "").strip().lower() for r in rows}
+    appearing.discard("")
+
     owners = {n.strip().lower() for n in (owner_names or []) if n and n.strip()}
     if not owners:
         owners = {n for n in (_owner_from_memory(cfg),) if n}
+    configured = set(owners)
+
+    # A configured name that appears NOWHERE in the export is not aconfiguration choice,
+    # it is a mismatch — and trusting it inverts the direction of every message,
+    # so the owner's own replies come back as unanswered inbound mail. That is
+    # the single most damaging failure this module has, and it looks like a
+    # working report. Verify the name is really in the data before trusting it.
+    trusted_config = bool(owners and (owners & appearing))
+    if owners and not trusted_config:
+        owners = set()
     if not owners:
         # Fallback: the owner is whoever appears in the MOST DISTINCT THREADS,
         # not whoever sent the most messages. A single persistent spammer can
@@ -568,6 +597,13 @@ def load_conversations(cfg: Config, owner_names: Optional[List[str]] = None) -> 
         if threads:
             best = max(threads, key=lambda w: (len(threads[w]), w))
             owners = {best}
+
+    # Record it unconditionally — the card reports it, and a stale value here is
+    # a report that names the wrong person as "us".
+    globals()["_LAST_OWNER"] = sorted(owners)[0] if owners else ""
+    globals()["_LAST_OWNER_SOURCE"] = (
+        "memory/ceo-persona.md" if trusted_config
+        else "inferred from the export" if owners else "unknown")
 
     convos: dict = {}
     for row in rows:

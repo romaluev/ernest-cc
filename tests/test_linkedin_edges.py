@@ -133,6 +133,37 @@ def main() -> int:
             shutil.rmtree(d, ignore_errors=True)
         check(f"survives {label}", ok, detail)
 
+    # --- BROKE IT: a configured name that matches nobody in the export -------
+    # The seeded persona said one name, the export used another. Nothing matched,
+    # so every message read as inbound and the owner's own replies came back as
+    # unanswered mail — a completely inverted inbox that still looked like a
+    # normal report. This is the most damaging failure in the module.
+    _, _, convos = _load(msg=MHEAD +
+                         'c1,,Real Owner,https://x.com/in/owner,Alice,https://x.com/in/alice,2026-08-01,,"hi",INBOX\n'
+                         'c1,,Alice,https://x.com/in/alice,Real Owner,https://x.com/in/owner,2026-08-02,,"hello back",INBOX\n'
+                         'c2,,Real Owner,https://x.com/in/owner,Bob,https://x.com/in/bob,2026-08-03,,"hey",INBOX\n',
+                         persona="Someone Who Is Not In This Export")
+    import ernest.sources as _s          # after _load: it re-imports the package
+    names = {c.counterparty for c in convos}
+    check("a persona name matching nobody is not trusted",
+          "Real Owner" not in names, str(names))
+    owner, how = _s.last_owner()
+    check("...the real owner is inferred instead", owner == "real owner", owner)
+    check("...and the report can say how it decided",
+          "inferred" in how, how)
+
+    # A name that DOES appear is trusted, and reported as configured.
+    _, _, convos = _load(msg=MHEAD +
+                         'c1,,Alice,https://x.com/in/alice,Real Owner,https://x.com/in/owner,2026-08-01,,"hi",INBOX\n'
+                         'c1,,Real Owner,https://x.com/in/owner,Alice,https://x.com/in/alice,2026-08-02,,"reply",INBOX\n',
+                         persona="Real Owner")
+    import ernest.sources as _s2
+    owner, how = _s2.last_owner()
+    check("a persona name present in the export is trusted",
+          owner == "real owner" and "persona" in how, f"{owner} / {how}")
+    check("...and our own reply is not counted as owed",
+          convos and not convos[0].owed, str([c.owed for c in convos]))
+
     # --- the owner is not simply the loudest sender -------------------------
     _, _, convos = _load(msg=MHEAD +
                          'c1,,Alice,https://x.com/in/alice,Bob Owner,https://x.com/in/bob,2026-08-01,,"hi",INBOX\n'

@@ -41,10 +41,44 @@ import argparse
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+
+
+_NICE_NAMES = {"linkedin-invitations": "invitations", "linkedin-dms": "messages"}
+
+
+def _tidy(written, source_root: Path, dest: Path, *, point_latest: bool = True):
+    """Copy the engine's output into a layout a human can navigate.
+
+    The engine nests reports under <vault>/Ernest/00-Watch/ with the date in the
+    filename, which makes sense inside the larger product and makes none here.
+    Standalone it should be reports/<date>/invitations.md — obvious, sorted, and
+    with a `latest` that always points at the newest run.
+    """
+    import shutil
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
+    for path in written:
+        path = Path(path)
+        stem = path.stem.split("--")[0]
+        nice = _NICE_NAMES.get(stem, stem)
+        target = dest / f"{nice}{path.suffix}"
+        shutil.copy2(path, target)
+        out.append(target)
+    if not point_latest:
+        return out
+    latest = dest.parent / "latest"
+    try:
+        if latest.is_symlink() or latest.exists():
+            latest.unlink() if latest.is_symlink() else shutil.rmtree(latest)
+        latest.symlink_to(dest.name)
+    except OSError:
+        pass                      # a pointer is a convenience, not a requirement
+    return out
 
 
 def main() -> int:
@@ -56,8 +90,12 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.demo:
-        import shutil, tempfile
-        scratch = Path(tempfile.mkdtemp(prefix="li-demo-"))
+        import shutil
+        # Inside the install, and reused. Scattering scratch directories around
+        # someone's machine is not an acceptable side effect of a demo.
+        scratch = HERE / ".demo"
+        if scratch.exists():
+            shutil.rmtree(scratch, ignore_errors=True)
         for sub in ("data/grading", "data/linkedin", "data/hubspot", "memory"):
             (scratch / sub).mkdir(parents=True, exist_ok=True)
         for src, dst in ((HERE / "examples" / "invitations.example.csv",
@@ -79,11 +117,12 @@ def main() -> int:
         from ernest import config, grade_run      # noqa: E402
         written = grade_run.run(config.load(), b2b=False, talent=False,
                                 linkedin=True, linkedin_dms=True)
-        for path in written:
+        # A demo must never claim to be the latest real report.
+        for path in _tidy(written, scratch, HERE / "reports" / "demo",
+                          point_latest=False):
             print(path)
         print("")
-        print("Demo only — fictional people, written to "
-              + str(scratch) + ". Your own data/ was not touched.")
+        print("Demo only — fictional people. Your own data/ was not touched.")
         return 0 if written else 3
 
     os.environ.setdefault("ERNEST_PROFILE_DIR", str(HERE))
@@ -91,7 +130,7 @@ def main() -> int:
     # reads <profile>/memory, and the profile IS this directory, so it is picked
     # up with no extra wiring. That file pins the account owner, which decides
     # the direction of every message in the inbox.
-    os.environ.setdefault("ERNEST_LOCAL_VAULT", str(HERE / "reports"))
+    os.environ.setdefault("ERNEST_LOCAL_VAULT", str(HERE / ".state"))
     os.environ.setdefault("ERNEST_MODE", "local")
 
     have_data = any((HERE / "data" / "linkedin").glob("*.csv"))
@@ -117,18 +156,25 @@ def main() -> int:
         if args.from_archive:
             cmd += ["--from-archive", args.from_archive]
         proc = subprocess.run(cmd, text=True)
-        if proc.returncode not in (0,):
-            print("\\nIngest could not reach LinkedIn. Grading whatever is already here.",
+        if proc.returncode != 0:
+            print("Ingest could not reach LinkedIn. Grading whatever is already here.",
                   file=sys.stderr)
 
     from ernest import config, grade_run          # noqa: E402
     cfg = config.load()
-    written = grade_run.run(cfg, b2b=False, talent=False, linkedin=True)
+    # BOTH surfaces. Leaving linkedin_dms off here once shipped a bundle where
+    # the DM half only ever ran in --demo — the exact failure this comment exists
+    # to prevent recurring.
+    written = grade_run.run(cfg, b2b=False, talent=False,
+                            linkedin=True, linkedin_dms=True)
     if not written:
         print("Nothing to grade. Run the ingest first, or drop a CSV into data/linkedin/.")
         return 3
-    for path in written:
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    for path in _tidy(written, HERE, HERE / "reports" / stamp):
         print(path)
+    print("")
+    print("Latest is always: reports/latest/")
     return 0
 
 
@@ -142,14 +188,16 @@ if __name__ == "__main__":
 write("install.sh", '''#!/usr/bin/env bash
 # One-command setup for the standalone LinkedIn inbound triage bundle.
 #
-#   ./install.sh              install, verify, run once, schedule
-#   ./install.sh --no-cron    skip the daily schedule
+#   ./install.sh              install and verify (no system changes)
+#   ./install.sh --daily      also add a daily 08:00 crontab entry
 #
 # No pip, no npm, no vendor SDK. Python standard library only.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DO_CRON=1
-[ "${1:-}" = "--no-cron" ] && DO_CRON=0
+# Scheduling edits the user's crontab, so it is OPT-IN. Handing someone a tool
+# that quietly installs a daily job is not acceptable, however useful it is.
+DO_CRON=0
+[ "${1:-}" = "--daily" ] && DO_CRON=1
 
 GAPS=()
 step() { printf '  [%s] %s\\n' "$1" "$2"; }
@@ -186,13 +234,13 @@ fi
 # Prove the pipeline works using the fictional examples in a scratch directory.
 # data/ ships empty on purpose, so this must never write a report into it.
 DEMO_OUT="$(python3 "$HERE/linkedin_triage.py" --demo 2>&1)"
-if printf '%s' "$DEMO_OUT" | grep -q "linkedin-invitations--"; then
+if printf '%s' "$DEMO_OUT" | grep -q "invitations.md"; then
   step ok "invitations pipeline verified (on the examples)"
 else
   step "--" "the invitations pipeline produced nothing"
   gap "Run \\`python3 linkedin_triage.py --demo\\` and read the error."
 fi
-if printf '%s' "$DEMO_OUT" | grep -q "linkedin-dms--"; then
+if printf '%s' "$DEMO_OUT" | grep -q "messages.md"; then
   step ok "DM pipeline verified (on the examples)"
 else
   step "--" "the DM pipeline produced nothing"
@@ -213,6 +261,9 @@ for t in "$HERE"/tests/test_*.py; do
     || { step "--" "$(basename "$t" .py) FAILED"; gap "A guarantee is broken: PYTHONPATH=$HERE python3 $t"; }
 done
 
+if [ "$DO_CRON" -eq 0 ]; then
+  step ok "no schedule installed (run ./install.sh --daily if you want one)"
+fi
 if [ "$DO_CRON" -eq 1 ]; then
   LINE="0 8 * * 1-5 cd \\"$HERE\\" && python3 \\"$HERE/linkedin_triage.py\\" >> \\"$HERE/triage.log\\" 2>&1"
   if crontab -l 2>/dev/null | grep -Fq "$HERE/linkedin_triage.py"; then
@@ -227,7 +278,7 @@ fi
 
 echo ""
 if [ "${#GAPS[@]}" -eq 0 ]; then
-  echo "Ready. Reports land in reports/Ernest/00-Watch/."
+  echo "Ready. Reports land in reports/latest/ (invitations.md, messages.md)."
   echo "Nothing is ever accepted, ignored, or reported without your approval."
   exit 0
 fi

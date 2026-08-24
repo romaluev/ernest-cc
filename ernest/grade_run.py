@@ -17,8 +17,9 @@ from .config import Config, ensure_dirs
 from . import li_insight
 from .grading import (Grade, LinkedInDMGrade, LinkedInGrade, grade_b2b,
                       grade_linkedin_dm, grade_linkedin_inbound, grade_talent, pool_name)
-from .sources import (Contact, Conversation, Invitation, Thread, load_contacts,
-                      load_conversations, load_invitations, load_threads)
+from .sources import (Contact, Conversation, Invitation, Thread, last_owner,
+                      load_contacts, load_conversations, load_invitations,
+                      load_threads)
 
 # Hiring/candidate threads are graded by the TALENT rubric, not as B2B sales leads —
 # keep them out of the buyer pipeline so a candidate never reads as a customer.
@@ -574,6 +575,13 @@ def _linkedin_dm_card(cfg: Config, analyzed, csv_path: Path, prev: Dict[str, obj
     banner = _sample_data_banner([c.counterparty_url or c.counterparty for c, _, _ in analyzed])
     if banner:
         lines += [banner, ""]
+    # Whose inbox this is, and how that was decided. If this line is wrong, every
+    # direction in the report is wrong — and it would otherwise look fine.
+    owner, how = last_owner()
+    if owner:
+        lines += [f"Reading as: **{owner}** ({how}). "
+                  "If that is not you, every direction below is inverted — "
+                  "fix the Name line in memory/ceo-persona.md.", ""]
     if prev:
         bits = []
         if diff.new:

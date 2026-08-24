@@ -46,6 +46,9 @@ CANONICAL_FIELDS = ["name", "public_url", "urn", "headline", "company", "locatio
 RUNGS = {1: "local-export", 2: "linkedin-archive", 3: "linkedin-live",
          4: "hubspot-mirror", 5: "unavailable"}
 
+# How many message rows the last archive import wrote, so the run can say so.
+_LAST_MESSAGE_ROWS = 0
+
 INVITATION_MANAGER = "https://www.linkedin.com/mynetwork/invitation-manager/received/"
 DOWNLOAD_MY_DATA = "https://www.linkedin.com/mypreferences/d/download-my-data"
 
@@ -187,6 +190,25 @@ def rung1_cache(li_dir: Path, max_age_hours: float) -> Optional[Tuple[List[Dict[
 # Rung 2 — LinkedIn's own archive export
 # --------------------------------------------------------------------------- #
 
+def parse_archive_messages(zip_path: Path) -> str:
+    """Pull messages.csv out of the export, verbatim.
+
+    The engine already understands LinkedIn's own column names, so this is a
+    passthrough rather than a re-mapping — and passing the raw file through means
+    a change in their schema surfaces as an unrecognised column rather than as
+    silently dropped messages.
+
+    Returns "" when the archive has no messages (the user did not tick that box).
+    """
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [n for n in zf.namelist()
+                 if n.lower().endswith(".csv")
+                 and ("message" in n.lower() or "conversation" in n.lower())]
+        if not names:
+            return ""
+        return zf.read(names[0]).decode("utf-8-sig", "replace")
+
+
 def parse_archive(zip_path: Path) -> List[Dict[str, str]]:
     """Read Invitations.csv out of a "Get a copy of your data" zip.
 
@@ -278,9 +300,25 @@ def _download_archive(drv: browser.Driver, dest: Path) -> Optional[Path]:
     return dest
 
 
+def _save_messages(li_dir: Path, text: str, dry_run: bool) -> int:
+    """Write messages.csv alongside invitations.csv. Returns the row count."""
+    if not text.strip() or dry_run:
+        return 0
+    li_dir.mkdir(parents=True, exist_ok=True)
+    path = li_dir / "messages.csv"
+    tmp = path.with_suffix(".csv.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+    return max(0, len(text.strip().splitlines()) - 1)
+
+
 def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float,
                   prefer: str) -> Optional[List[Dict[str, str]]]:
     if zip_path:
+        # The export carries messages too, and dropping them meant the DM half of
+        # the product had no data on its primary path.
+        globals()["_LAST_MESSAGE_ROWS"] = _save_messages(
+            li_dir, parse_archive_messages(zip_path), dry_run=False)
         return parse_archive(zip_path)
     drv = browser.open_driver(prefer)          # raises -> caller falls a rung
     try:
@@ -295,6 +333,8 @@ def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float
         while time.time() < deadline:
             got = _download_archive(drv, dest)
             if got:
+                globals()["_LAST_MESSAGE_ROWS"] = _save_messages(
+                    li_dir, parse_archive_messages(got), dry_run=False)
                 return parse_archive(got)
             time.sleep(20)
             drv.goto(DOWNLOAD_MY_DATA)
@@ -467,8 +507,12 @@ def ingest(profile: Path, *, only_rung: Optional[int] = None, zip_path: Optional
             rows = _dedupe(rows)
             if rows:
                 path = _write_rows(li_dir, rows, rung, dry_run)
-                return {"ok": True, "rung": rung, "source": RUNGS[rung], "rows": len(rows),
-                        "path": str(path), "dry_run": dry_run, "attempts": attempts}
+                result = {"ok": True, "rung": rung, "source": RUNGS[rung],
+                          "rows": len(rows), "path": str(path), "dry_run": dry_run,
+                          "attempts": attempts}
+                if _LAST_MESSAGE_ROWS:
+                    result["message_rows"] = _LAST_MESSAGE_ROWS
+                return result
             attempts.append({"rung": f"{rung} {RUNGS[rung]}", "why": "returned no rows"})
         except Exception as exc:  # noqa: BLE001 — a failed rung must not end the ladder
             attempts.append({"rung": f"{rung} {RUNGS[rung]}", "why": str(exc)[:300]})
@@ -591,8 +635,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                  wait_minutes=args.wait_minutes, prefer=args.prefer, dry_run=args.dry_run)
     lines = [f"  rung {a['rung']}: {a['why']}" for a in res["attempts"]]
     if res["ok"]:
+        msgs = res.get("message_rows") or 0
         lines.append(f"Ingest: rung {res['rung']} ({res['source']}) — {res['rows']} invitation(s)"
+                     + (f", {msgs} message row(s)" if msgs else "")
                      + (" [dry run, nothing written]" if res.get("dry_run") else f" -> {res['path']}"))
+        if not msgs and res["rung"] == 2:
+            lines.append("  note: no messages in that archive — tick Messages in the "
+                         "export request if you want the DM report too.")
     else:
         lines.append(f"Ingest: UNAVAILABLE. {res['remedy']}")
     cc.emit(cc.envelope(res, source=res["source"], rung=res["rung"],

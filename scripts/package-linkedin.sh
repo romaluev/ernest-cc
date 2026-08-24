@@ -190,8 +190,8 @@ DEMO_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --demo 2>&1 )" || {
   printf '%s\n' "$DEMO_OUT" | tail -12 >&2
   VERIFY_FAIL=1
 }
-for want in linkedin-invitations linkedin-dms; do
-  if printf '%s' "$DEMO_OUT" | grep -q "$want--"; then
+for want in invitations messages; do
+  if printf '%s' "$DEMO_OUT" | grep -q "$want.md"; then
     say "$want report produced"
   else
     echo "  FAIL: no $want report — that half of the bundle is dead" >&2
@@ -210,6 +210,21 @@ fi
 # the shipped sample world; if any of it survives into a private handover, the
 # seed did not fully apply and the report will quietly reference a company that
 # does not exist.
+# The REAL path (not --demo) must run both halves. A bundle where DMs only work
+# in demo mode passes every other check here and is dead on arrival.
+REAL_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --from-archive tests/fixtures/linkedin-archive.zip 2>&1 )"
+for want in invitations messages; do
+  if printf '%s' "$REAL_OUT" | grep -q "reports/.*$want.md"; then
+    say "real path produces $want.md"
+  else
+    echo "  FAIL: the real path (not --demo) produced no $want.md" >&2
+    printf '%s\n' "$REAL_OUT" | tail -6 >&2
+    VERIFY_FAIL=1
+  fi
+done
+rm -rf "$STAGE/reports" "$STAGE/.state" "$STAGE/data/linkedin"/*.csv \
+       "$STAGE/data/linkedin/.ingest.json" 2>/dev/null || true
+
 # A first run with no data must explain itself and exit 3, not crash or lie.
 # `set -e` would abort here on the exit code we are deliberately asserting.
 rc=0
@@ -247,6 +262,13 @@ src = (stage / "ernest" / "grade_run.py").read_text()
 tree = ast.parse(src)
 defined = {n.name for n in ast.walk(tree)
            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+# Imported names are available too; treating them as missing would flag every
+# legitimate import and train whoever reads this to ignore it.
+for n in ast.walk(tree):
+    if isinstance(n, (ast.Import, ast.ImportFrom)):
+        defined |= {(a.asname or a.name).split(".")[0] for a in n.names}
+    elif isinstance(n, ast.Assign):
+        defined |= {t.id for t in n.targets if isinstance(t, ast.Name)}
 called = {n.func.id for n in ast.walk(tree)
           if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
 import builtins
@@ -263,7 +285,10 @@ if missing:
     sys.exit(1)
 print("  [ok] every function the engine calls is present")
 PYCHK
-rm -rf "$STAGE/reports" "$STAGE/logs" "$STAGE/data/linkedin/.ingest.json"
+# Everything the verification run generated. A bundle that ships its own scratch
+# is both larger and confusing — and .demo/ carries a copy of the seeded memory.
+rm -rf "$STAGE/reports" "$STAGE/logs" "$STAGE/.demo" "$STAGE/.state" \
+       "$STAGE/.browser-profile" "$STAGE/data/linkedin/.ingest.json"
 find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 set -e
 if [ "$VERIFY_FAIL" -ne 0 ]; then
@@ -277,7 +302,15 @@ echo
 mkdir -p "$OUT"
 ZIP="$OUT/$NAME${SUFFIX:-}.zip"
 rm -f "$ZIP"
-( cd "$(dirname "$STAGE")" && zip -qr "$ZIP" "$NAME" -x '*__pycache__*' '*.pyc' )
+# Assert, do not assume: nothing generated may ship.
+for junk in .demo .state .browser-profile reports logs; do
+  if [ -e "$STAGE/$junk" ]; then
+    echo "REFUSING: generated '$junk' would ship in the bundle" >&2
+    exit 1
+  fi
+done
+( cd "$(dirname "$STAGE")" && zip -qr "$ZIP" "$NAME" \
+    -x '*__pycache__*' '*.pyc' '*/.demo/*' '*/.state/*' '*/.browser-profile/*' )
 rm -rf "$(dirname "$STAGE")"
 
 echo

@@ -246,7 +246,11 @@ def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0) -> bool
     exe = find_chromium()
     if not exe:
         return False
-    profile = Path.home() / ".ernest-cc" / "browser-profile"
+    # Keep the browser profile INSIDE the install, not in the user's home. A tool
+    # someone was handed should not leave directories around their machine, and
+    # deleting the folder must be enough to remove every trace of it.
+    root = Path(os.environ.get("LI_HOME") or Path(__file__).resolve().parents[2])
+    profile = root / ".browser-profile"
     profile.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.Popen(
