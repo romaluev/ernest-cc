@@ -168,6 +168,12 @@ if [ -n "$SEED" ] && [ -d "$SEED" ]; then
 fi
 
 BUILD_SHA="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# A commit hash on a build made from a dirty tree is a lie — the code shipped is
+# not the code at that commit. Say so rather than let someone chase a hash that
+# does not contain what they are looking at.
+if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]; then
+  BUILD_SHA="$BUILD_SHA+uncommitted"
+fi
 BUILD_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > "$STAGE/BUILD.txt" <<EOF
 linkedin-inbound $VERSION${SUFFIX:-}
