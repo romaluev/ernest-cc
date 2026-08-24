@@ -144,7 +144,10 @@ def _talent_card(cfg: Config, graded: List[Tuple[dict, Grade]]) -> str:
 # read and becomes a second inbox. 6,780 pending invitations cannot be a list.
 MAX_NAMED = 15
 
-_LI_CSV_FIELDS = ["tier", "signal", "score", "confidence", "action", "name",
+# The card is the human view; this is the audit trail. `lane` and `summary` are
+# what the card shows, `why` is every rubric list that matched — both live here
+# so a disagreement can be traced without re-running the grader.
+_LI_CSV_FIELDS = ["tier", "lane", "summary", "signal", "score", "confidence", "action", "name",
                   "public_url", "headline", "company", "location", "sent_at",
                   "days_waiting", "mutual_connections", "connections", "note",
                   "why", "check", "identity_key"]
@@ -215,7 +218,9 @@ def _li_sidecar(cfg: Config, graded: List[Tuple[Invitation, LinkedInGrade]]) -> 
         w.writeheader()
         for inv, g in graded:
             w.writerow({
-                "tier": g.tier, "signal": g.signal, "score": int(g.score),
+                "tier": g.tier, "lane": getattr(g, "lane", ""),
+                "summary": getattr(g, "summary", ""),
+                "signal": g.signal, "score": int(g.score),
                 "confidence": g.confidence, "action": g.action,
                 "name": inv.name, "public_url": inv.public_url,
                 "headline": inv.headline, "company": inv.company,
@@ -230,22 +235,91 @@ def _li_sidecar(cfg: Config, graded: List[Tuple[Invitation, LinkedInGrade]]) -> 
     return path
 
 
-_BUCKET_COPY = {
-    "tier-2": ("Worth a look", "ICP-adjacent or unknown, no decisive buyer signal.",
-               "Review the top rows in {csv} — ranked by score."),
-    "trash": ("Spam / seller pitch", "Cold vendor, mass-template, or thin-network invites.",
-              'Say "remove the spam" to queue Ignore in batches. Nothing happens until you do.'),
+# What a lane IS, in the words a person would use. The report says
+# "2 investors, 1 competitor", never "2 tier-1, 1 hold" — a tier is our
+# bookkeeping, a lane is the answer to "who is this".
+_LANE_WORDS = {
+    "investor": ("investor", "investors"),
+    "customer": ("customer", "customers"),
+    "enterprise": ("enterprise buyer", "enterprise buyers"),
+    "influencer": ("creator", "creators"),
+    "buyer": ("ICP buyer", "ICP buyers"),
+    "colleague": ("colleague", "colleagues"),
+    "talent": ("possible hire", "possible hires"),
+    "partnership": ("partnership offer", "partnership offers"),
+    "seller": ("seller", "sellers"),
+    "consultant": ("consultant", "consultants"),
+    "applicant": ("cold applicant", "cold applicants"),
+    "press": ("journalist", "journalists"),
+    "competitor": ("competitor", "competitors"),
+    "legal": ("legal/regulatory", "legal/regulatory"),
+    "exec-claim": ("claimed prior contact", "claim prior contact"),
+    "suppressed": ("suppressed contact", "suppressed contacts"),
+    "unknown": ("unidentified", "unidentified"),
+    "other": ("other", "other"),
 }
+
+
+def _lane_phrase(grades) -> str:
+    """"2 investors, 1 creator" — biggest group first, at most four groups."""
+    tally: Dict[str, int] = {}
+    for g in grades:
+        lane = getattr(g, "lane", "other")
+        tally[lane] = tally.get(lane, 0) + 1
+    ranked = sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))
+    bits = []
+    for lane, count in ranked[:4]:
+        one, many = _LANE_WORDS.get(lane, (lane, lane))
+        bits.append(f"{count} {one if count == 1 else many}")
+    if len(ranked) > 4:
+        bits.append(f"{sum(c for _, c in ranked[4:])} other")
+    return ", ".join(bits)
+
+
+def _person_block(idx: int, inv, g, cfg: Config, *, in_dms: bool) -> List[str]:
+    """One invitation, in as few lines as carry the decision.
+
+    Deliberately not a key/value dump. The earlier version printed `value:`,
+    `signal:`, `checked:` and a semicolon-joined list of every rubric list that
+    matched — accurate, unreadable, and the reason the PDF came back described
+    as slop. What a person needs is who, why, how long, and what to do.
+    """
+    who = inv.name or "Unknown"
+    if inv.company:
+        who += f" — {inv.company}"
+    elif inv.headline:
+        who += f" — {inv.headline.split('|')[0].strip()[:50]}"
+    out = [f"**{idx}. {who}**"]
+
+    line = g.summary or (g.reasons[0] if g.reasons else "No decisive signal.")
+    if inv.sent_at:
+        line += f" Waiting {inv.days_waiting(cfg.today)}d."
+    out.append(line)
+
+    if inv.note:
+        note = " ".join(inv.note.split())
+        out.append(f'> "{note if len(note) <= 180 else note[:177] + "..."}"')
+
+    do = g.action
+    if in_dms:
+        do += " (also has an open DM — answering that settles both)"
+    if inv.public_url:
+        do += f" · {inv.public_url}"
+    out.append(f"Do: {do}")
+    if g.flags and g.tier in ("hold", "tier-1"):
+        out.append(f"Check: {g.flags[0]}")
+    out.append("")
+    return out
 
 
 def _linkedin_card(cfg: Config, analyzed, csv_path: Path,
                    prev: Dict[str, object], dm_keys: Optional[set] = None) -> str:
-    """The invitation report.
+    """The invitation report: a TL;DR, then the people, then the counts.
 
-    Same shape as the DM report and for the same reason: named where a person
-    has to decide, counted everywhere else. Invitations have no thread, so there
-    are no commitments or deadlines here — but the value question and the
-    mass-blast question both apply, and a 6,000-row queue is mostly blasts.
+    Shape follows what the reader actually does with it — decide on a handful,
+    approve a batch, ignore the rest. Tier-1 and hold are named individually
+    (capped); everything else is a count and a pointer to the CSV, because a
+    card that lists 6,780 people is a second inbox, not a report.
     """
     counts: Dict[str, int] = {}
     for _, g, _i in analyzed:
@@ -253,12 +327,11 @@ def _linkedin_card(cfg: Config, analyzed, csv_path: Path,
     source = analyzed[0][0].source if analyzed else "local-export"
     dm_keys = dm_keys or set()
 
-    named = [t for t in analyzed if t[1].tier in ("hold", "tier-1")][:MAX_NAMED]
-    named_keys = {inv.key for inv, _, _ in named}
-    overflow: Dict[str, int] = {}
-    for inv, g, _i in analyzed:
-        if inv.key not in named_keys:
-            overflow[g.tier] = overflow.get(g.tier, 0) + 1
+    accept = [t for t in analyzed if t[1].tier == "tier-1"]
+    decide = [t for t in analyzed if t[1].tier == "hold"]
+    ignore = [t for t in analyzed if t[1].tier == "trash"]
+    rest = [t for t in analyzed if t[1].tier in ("tier-2", "unknown")]
+    talent = [t for t in rest if getattr(t[1], "lane", "") == "talent"]
 
     identify = [t for t in analyzed
                 if t[2].value.needs_identification and t[1].tier != "trash"][:MAX_NAMED]
@@ -268,115 +341,111 @@ def _linkedin_card(cfg: Config, analyzed, csv_path: Path,
     # below threshold exactly when it matters.
     camps = li_insight.campaigns(
         [(inv.key, inv.note or inv.headline) for inv, g, _ in analyzed if g.tier == "trash"])
-    camp_members = {m for c in camps for m in c.members}
-    both = [t for t in analyzed if t[0].key in dm_keys and t[1].tier != "trash"]
-
     diff = li_insight.diff_runs(prev, {"items": {inv.key: {
         "bucket": g.tier, "days_waiting": inv.days_waiting(cfg.today)}
         for inv, g, _ in analyzed}})
 
+    need = len(accept) + len(decide)
     lines = [
-        f"# Watch: linkedin-invitations ({cfg.today.isoformat()})",
+        f"# LinkedIn invitations — {cfg.today.strftime('%d %b %Y')}",
         "",
         "type: reminder-card",
         f"source: {source}",
-        f"items: {len(analyzed)} pending — " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())),
+        f"items: {len(analyzed)} pending — "
+        + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())),
         "",
-        "Report only. Nothing is accepted, ignored, or reported until you say so.",
-        f"Full population: {csv_path.name}",
+        "## TL;DR",
         "",
+        f"- **{len(analyzed)} pending invitations. {need} need you.**",
     ]
-    banner = _sample_data_banner([inv.public_url or inv.name for inv, _, _ in analyzed])
-    if banner:
-        lines += [banner, ""]
+    if accept:
+        lines.append(f"- **Accept ({len(accept)})** — {_lane_phrase([g for _, g, _ in accept])}.")
+    if decide:
+        lines.append(f"- **Your call ({len(decide)})** — {_lane_phrase([g for _, g, _ in decide])}."
+                     " These never resolve on their own.")
+    if talent:
+        lines.append(f"- **Talent lane ({len(talent)})** — applied, with a real background behind it.")
+    if ignore:
+        lines.append(f"- **Ignore ({len(ignore)})** — {_lane_phrase([g for _, g, _ in ignore])}."
+                     ' Say "clean up the spam" and I will queue them in batches.')
+    other = len(rest) - len(talent)
+    if other > 0:
+        lines.append(f"- **{other} unclear** — close to what we sell, nothing decisive. "
+                     f"Ranked in {csv_path.name}; nothing owed today.")
     if prev:
         bits = []
         if diff.new:
             bits.append(f"{len(diff.new)} new")
         if diff.resolved:
             bits.append(f"{len(diff.resolved)} cleared")
-        lines.append(f"Since the last run: {', '.join(bits) if bits else 'nothing changed'}.")
-        lines.append("")
+        lines.append(f"- Since the last run: {', '.join(bits) if bits else 'nothing changed'}.")
+    lines += ["- Nothing is accepted, ignored or reported until you say so.", ""]
+
+    banner = _sample_data_banner([inv.public_url or inv.name for inv, _, _ in analyzed])
+    if banner:
+        lines += [banner, ""]
 
     n = 0
-    for inv, g, ins in named:
-        n += 1
-        who = inv.name or "Unknown"
-        if inv.company:
-            who += f" - {inv.company}"
-        lines.append(f"## {n}. [{g.tier.upper()}] {who}")
-        lines.append(f"- value: {ins.value.line()}")
-        lines.append(f"- signal: {g.signal}")
-        lines.append("- channel: Connection Request")
-        if inv.public_url:
-            lines.append(f"- linkedin: {inv.public_url}")
-        if inv.sent_at:
-            lines.append(f"- waiting: {inv.days_waiting(cfg.today)}d")
-        if inv.note:
-            note = inv.note if len(inv.note) <= 160 else inv.note[:157] + "..."
-            lines.append(f'- note: "{note}"')
-        if inv.key in dm_keys:
-            lines.append("- also: has an open DM thread — answering that settles this too")
-        lines.append(f"- why: {'; '.join(g.reasons) or 'No decisive signal'}")
-        lines.append(f"- action: {g.action}")
-        if g.flags:
-            lines.append(f"- check: {'; '.join(g.flags)}")
-        if g.tier == "tier-1" and g.action == "Accept":
-            lines.append("- crm: PROPOSE linkedin_inbound_invitation_status=Accepted")
+    if accept:
+        lines += [f"## Accept ({len(accept)})", ""]
+        for inv, g, _ins in accept[:MAX_NAMED]:
+            n += 1
+            lines += _person_block(n, inv, g, cfg, in_dms=inv.key in dm_keys)
+        if len(accept) > MAX_NAMED:
+            lines += [f"...and {len(accept) - MAX_NAMED} more in {csv_path.name}, "
+                      "same ranking.", ""]
+
+    if decide:
+        lines += [f"## Your call ({len(decide)})", "",
+                  "Press, competitors, legal, or someone claiming they already spoke to you. "
+                  "Never auto-accepted, never auto-ignored.", ""]
+        for inv, g, _ins in decide[:MAX_NAMED]:
+            n += 1
+            lines += _person_block(n, inv, g, cfg, in_dms=inv.key in dm_keys)
+        if len(decide) > MAX_NAMED:
+            lines += [f"...and {len(decide) - MAX_NAMED} more in {csv_path.name}.", ""]
+
+    if talent:
+        lines += [f"## Talent lane ({len(talent)})", "",
+                  "Applied, and there is something behind the application. "
+                  "Not buyers — route them to whoever owns the role.", ""]
+        for inv, g, _ins in talent[:8]:
+            lines.append(f"- **{inv.name or 'Unknown'}** — {g.summary}")
+        if len(talent) > 8:
+            lines.append(f"- ...and {len(talent) - 8} more in {csv_path.name}.")
         lines.append("")
+
+    if ignore:
+        lines += [f"## Spam — ignored only on your word ({len(ignore)})", "",
+                  f"{_lane_phrase([g for _, g, _ in ignore]).capitalize()}. "
+                  "Nothing happens until you say so, and ignoring is reversible — "
+                  "they can invite you again.", ""]
+        for camp in camps:
+            lines.append(f"- **{camp.size} of these are one sequence** — one judgment, not "
+                         f'{camp.size}. Sample: "{camp.sample[:110]}"')
+        for inv, g, _ins in ignore[:6]:
+            lines.append(f"- {inv.name or 'Unknown'} — {g.summary}")
+        if len(ignore) > 6:
+            lines.append(f"- ...and {len(ignore) - 6} more, all listed in {csv_path.name}.")
+        lines += ["", 'Say **"clean up the spam"** to queue these in batches of 25.', ""]
 
     if identify:
-        n += 1
-        lines.append(f"## {n}. [IDENTIFY] Strong signal, no idea who they are ({len(identify)})")
-        lines.append("These wrote something commercial but cannot be attributed to a company.")
-        lines.append("The next step is a 30-second lookup, not a reply in the dark.")
-        for inv, g, ins in identify:
-            lines.append(f"- {inv.name or 'Unknown'} — {ins.value.line()}")
-            if inv.note:
-                lines.append(f'    "{" ".join(inv.note.split())[:140]}"')
+        lines += [f"## Worth 30 seconds to identify ({len(identify)})", "",
+                  "Commercial intent, but no company we can attribute it to. "
+                  "The next step is a lookup, not a reply in the dark.", ""]
+        for inv, _g, _ins in identify[:8]:
+            note = " ".join((inv.note or inv.headline or "").split())[:110]
+            lines.append(f'- **{inv.name or "Unknown"}** — "{note}"')
         lines.append("")
 
-    if both:
-        n += 1
-        lines.append(f"## {n}. [BOTH SURFACES] Also in your DMs ({len(both)})")
-        lines.append("One person, two open threads. Answer the message and this resolves itself.")
-        for inv, g, ins in both[:MAX_NAMED]:
-            lines.append(f"- {inv.name or 'Unknown'} — {ins.value.band}")
-        lines.append("")
+    if other > 0:
+        lines += [f"## Everything else ({other})", "",
+                  "ICP-adjacent, no decisive signal, nothing owed. Ranked by score in "
+                  f"`{csv_path.name}` — read the top rows if you want more volume.", ""]
 
-    for camp in camps:
-        n += 1
-        lines.append(f"## {n}. [CAMPAIGN] {camp.size} invites from one sequence")
-        lines.append("One judgment, not " + str(camp.size) + ".")
-        lines.append(f'- sample: "{camp.sample}"')
-        lines.append("- action: ignore the whole cluster, or none of it")
-        lines.append("")
-
-    for tier in ("hold", "tier-1", "tier-2", "trash"):
-        count = overflow.get(tier, 0)
-        if tier == "trash":
-            count -= len(camp_members)
-        if count <= 0:
-            continue
-        n += 1
-        title, why, action = _BUCKET_COPY.get(
-            tier, (f"{tier} — not shown individually", "Above the on-card display limit.",
-                   "Read the rows in {csv}."))
-        if tier in ("hold", "tier-1"):
-            title = f"{tier.upper()} above the display limit"
-            why = f"{count} more scored {tier}; only the top {MAX_NAMED} are named."
-            action = "Read the top rows in {csv} — these still need a person."
-        lines.append(f"## {n}. [BUCKET] {title} ({count})")
-        lines.append(f"- count: {count}")
-        if tier == "trash":
-            lines.append("- signal: Spam")
-        lines.append(f"- why: {why}")
-        lines.append(f"- action: {action.format(csv=csv_path.name)}")
-        lines.append("")
-
-    lines.append("Reply draft these when you want me to prepare actions.")
-    lines.append("")
+    lines += ["Reply draft these when you want me to prepare actions.", ""]
     return "\n".join(lines)
+
 
 
 _DM_CSV_FIELDS = ["bucket", "signal", "score", "confidence", "action", "counterparty",
@@ -491,9 +560,8 @@ def _sample_data_banner(rows: List[str]) -> Optional[str]:
     if fake and fake >= len(rows) * 0.5:
         return ("> **This is SAMPLE data — these people are not real.** "
                 f"{fake} of {len(rows)} rows are the shipped fixtures. "
-                "Import a real export to replace them: LinkedIn -> Settings -> "
-                "Data Privacy -> Get a copy of your data -> tick Invitations and "
-                "Messages, then run the ingest with --from-archive <the zip>.")
+                "Run the tool again against your own account and they are "
+                "replaced — it fetches the real data itself.")
     return None
 
 
@@ -562,16 +630,42 @@ def _linkedin_dm_card(cfg: Config, analyzed, csv_path: Path, prev: Dict[str, obj
                                                  for c, g, _ in analyzed}})
 
     lines = [
-        f"# Watch: linkedin-dms ({cfg.today.isoformat()})",
+        f"# LinkedIn messages — {cfg.today.strftime('%d %b %Y')}",
         "",
         "type: reminder-card",
         f"source: {source}",
-        f"items: {len(analyzed)} thread(s) — " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())),
+        f"items: {len(analyzed)} thread(s) — "
+        + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())),
         "",
-        "Report only. Nothing is replied to, archived, or reported until you say so.",
-        f"Full population: {csv_path.name}",
+        "## TL;DR",
         "",
     ]
+    # The lead is what it costs to keep ignoring this, in the order it costs.
+    todo = len(escalations) + len(owed_us) + len(waiting) + len(holds)
+    lines.append(f"- **{len(analyzed)} threads. {todo} need you.**")
+    if escalations:
+        lines.append(f"- **Answer personally ({len(escalations)})** — "
+                     + ", ".join(f"{c.counterparty or 'Unknown'}" for c, _, _ in escalations[:3])
+                     + ". Money, legal, security or churn — not delegatable.")
+    if owed_us:
+        late = max((x.days_overdue for _, _, i in owed_us for x in i.open_commitments), default=0)
+        chased = sum(1 for _, _, i in owed_us if any(x.chased for x in i.open_commitments))
+        lines.append(f"- **You promised {len(owed_us)} people something** and have not sent it. "
+                     f"Oldest is {late}d overdue"
+                     + (f"; {chased} chased you about it." if chased else "."))
+    overdue = [d for _, _, _, d in clocks if d.status(cfg.today).startswith("passed")]
+    if clocks:
+        lines.append(f"- **{len(clocks)} deadlines** they set"
+                     + (f", {len(overdue)} already passed." if overdue else "."))
+    if waiting:
+        lines.append(f"- **{len(waiting)} waiting on a reply** with nothing promised yet.")
+    if holds:
+        lines.append(f"- **{len(holds)} for you personally** — press, investors, competitors or legal.")
+    if counts.get("trash"):
+        lines.append(f"- **{counts['trash']} cold pitches** — say \"clean up my LinkedIn DMs\" "
+                     "and I will queue them to archive.")
+    lines += ["- Nothing is replied to, archived or reported until you say so.",
+              f"- Full population: {csv_path.name}", ""]
     banner = _sample_data_banner([c.counterparty_url or c.counterparty for c, _, _ in analyzed])
     if banner:
         lines += [banner, ""]
@@ -603,77 +697,85 @@ def _linkedin_dm_card(cfg: Config, analyzed, csv_path: Path, prev: Dict[str, obj
             lines.append(note)
 
     def person(convo, ins) -> str:
-        who = convo.counterparty or "Unknown"
-        return f"{who} — {ins.value.line()}"
+        """Name, and what they are — not the internal score.
 
-    for convo, g, ins in escalations[:MAX_NAMED]:
-        head(f"[ESCALATION] {person(convo, ins)}")
-        lines.append(f"- why: {'; '.join(g.reasons)}")
-        lines.append(f"- state: {ins.state.summary}")
-        last = sorted(convo.inbound, key=lambda m: (m.at or cfg.today))[-1].body if convo.inbound else ""
-        if last:
-            lines.append(f'- said: "{" ".join(last.split())[:180]}"')
-        lines.append(f"- action: {g.action}")
-        lines.append(f"- thread_id: {convo.id}")
+        `ins.value.line()` renders as "critical (118) — open deal in the CRM".
+        The parenthesised number is ours, not theirs; it belongs in the CSV.
+        """
+        who = convo.counterparty or "Unknown"
+        v = ins.value
+        why = v.identified_by or (v.facts or v.signals or [""])[0]
+        if v.needs_identification:
+            why = (why + " — worth identifying").lstrip(" —")
+        return f"**{who}**" + (f" — {why}" if why else "")
+
+    if escalations:
+        head("Answer personally",
+             "Money, legal, security, churn or safety. Never templated, never delegated.")
         lines.append("")
+        for convo, g, ins in escalations[:MAX_NAMED]:
+            lines.append(f"{person(convo, ins)} — {'; '.join(g.reasons[:2])}")
+            last = (sorted(convo.inbound, key=lambda m: (m.at or cfg.today))[-1].body
+                    if convo.inbound else "")
+            if last:
+                lines.append(f'> "{" ".join(last.split())[:180]}"')
+            lines.append(f"Do: {g.action} · {ins.state.summary}")
+            lines.append("")
 
     if owed_us:
-        head("[YOU PROMISED] Unkept commitments",
-             "Sorted by what it costs to keep breaking them. "
-             "Delivered, vague, and no-name promises are filtered out.")
+        head("You promised, and it never went out",
+             "Ranked by what it costs to keep breaking them. Promises already "
+             "delivered, and vague ones with no named subject, are filtered out.")
+        lines.append("")
         for convo, g, ins in owed_us[:MAX_NAMED]:
             for c in ins.open_commitments[:2]:
-                lines.append(f"- {convo.counterparty or 'Unknown'} — {ins.value.band} — "
-                             f"{c.kind}, {c.days_overdue}d ago"
-                             + (", **they chased**" if c.chased else ""))
+                chased = " — **and they chased you**" if c.chased else ""
+                lines.append(f"- **{convo.counterparty or 'Unknown'}** — "
+                             f"{c.kind}, {c.days_overdue}d ago{chased}")
                 lines.append(f'    "{c.quote}"')
         lines.append("")
 
     if clocks:
-        head("[CLOCK] Deadlines they set",
-             "Resolved against the date the message was written, not today.")
+        head("Deadlines they set",
+             '"Before Friday" is resolved against the day it was written, not today.')
+        lines.append("")
         for convo, g, ins, d in clocks[:MAX_NAMED]:
-            lines.append(f"- {convo.counterparty or 'Unknown'} — {ins.value.band} — "
-                         f'"{d.phrase}" -> {d.due} ({d.status(cfg.today)})')
+            lines.append(f'- **{convo.counterparty or "Unknown"}** — "{d.phrase}" '
+                         f"= {d.due} ({d.status(cfg.today)})")
         lines.append("")
 
     if waiting:
-        head("[WAITING] They wrote last and got no answer")
+        head("Waiting on you", "They wrote last and never got an answer.")
+        lines.append("")
         for convo, g, ins in waiting[:MAX_NAMED]:
-            lines.append(f"- {person(convo, ins)} — {convo.days_waiting(cfg.today)}d — "
+            lines.append(f"- {person(convo, ins)} — {convo.days_waiting(cfg.today)}d, "
                          f"{ins.state.stage}")
-            last = sorted(convo.inbound, key=lambda m: (m.at or cfg.today))[-1].body if convo.inbound else ""
+            last = (sorted(convo.inbound, key=lambda m: (m.at or cfg.today))[-1].body
+                    if convo.inbound else "")
             if last:
                 lines.append(f'    "{" ".join(last.split())[:150]}"')
         lines.append("")
 
-    for convo, g, ins in holds[:MAX_NAMED]:
-        head(f"[HOLD] {convo.counterparty or 'Unknown'}")
-        lines.append(f"- why: {'; '.join(g.reasons)}")
-        lines.append(f"- action: {g.action}")
-        lines.append(f"- thread_id: {convo.id}")
+    if holds:
+        head("Your call", "Press, investors, competitors or legal. These never auto-resolve.")
+        lines.append("")
+        for convo, g, ins in holds[:MAX_NAMED]:
+            lines.append(f"- **{convo.counterparty or 'Unknown'}** — "
+                         f"{'; '.join(g.reasons[:2])}. {g.action}")
         lines.append("")
 
     for camp in camps:
-        head(f"[CAMPAIGN] {camp.size} senders running the same sequence",
-             "One judgment, not " + str(camp.size) + ".")
-        lines.append(f'- sample: "{camp.sample}"')
-        lines.append(f"- action: archive the whole cluster, or none of it")
+        head(f"{camp.size} senders, one sequence",
+             f"One judgment, not {camp.size}. Archive the whole cluster or none of it.")
+        lines.append(f'> "{camp.sample}"')
         lines.append("")
 
+    # The spam and no-action counts are already in the TL;DR. Repeating them as
+    # sections at the bottom is the padding that made this read like filler.
     solo_spam = counts.get("trash", 0) - len(camp_members)
-    if solo_spam > 0:
-        head(f"[BUCKET] Spam / cold pitches ({solo_spam})")
-        lines.append("- signal: Spam")
-        lines.append('- action: Say "clean up my LinkedIn DMs" to queue Archive in batches.')
-        lines.append("")
-    if counts.get("fyi"):
-        head(f"[BUCKET] No action needed ({counts['fyi']})")
-        lines.append(f"- action: Skim {csv_path.name} if you want; nothing here is waiting on you.")
-        lines.append("")
 
     if diff.still_waiting:
-        head("[AGING] Longest unanswered")
+        head("Longest unanswered")
         by_id = {c.id: c for c, _, _ in analyzed}
         for key, days in diff.still_waiting[:5]:
             convo = by_id.get(key)

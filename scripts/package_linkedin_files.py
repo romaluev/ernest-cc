@@ -169,34 +169,49 @@ def main() -> int:
     if not have_data and not args.from_archive:
         found = find_export()
         if found:
-            print(f"Found a LinkedIn export: {found}", file=sys.stderr)
-            print("Using it. Pass --from-archive to point at a different one.",
+            print(f"Found a LinkedIn export already on this machine: {found}",
                   file=sys.stderr)
             args.from_archive = str(found)
-    if not have_data and not args.from_archive:
-        for line in [
-            "No LinkedIn data yet — and this tool does not invent any.",
-            "",
-            "Get your export (it takes a few minutes):",
-            "  1. LinkedIn -> Settings -> Data Privacy -> Get a copy of your data",
-            "  2. Tick Invitations and Messages",
-            "  3. When the email arrives:",
-            "       python3 linkedin_triage.py --from-archive ~/Downloads/<file>.zip",
-            "",
-            "Want to see what a report looks like first?",
-            "       python3 linkedin_triage.py --demo    (fictional people, scratch dir)",
-        ]:
-            print(line, file=sys.stderr)
-        return 3
 
+    # ALWAYS run the ladder before saying anything is missing. The earlier
+    # version printed a four-step "go and export your data" list whenever
+    # data/linkedin was empty — which is exactly the state a fresh install is
+    # in, so the very first run handed the user homework the tool can do
+    # itself. The ladder requests the export, waits for it, downloads it and
+    # unpacks it. The only thing it cannot do is type a password.
     if not args.grade_only:
         cmd = [sys.executable, str(HERE / "adapters" / "linkedin" / "ingest.py"),
                "--profile-dir", str(HERE)]
         if args.from_archive:
             cmd += ["--from-archive", args.from_archive]
         proc = subprocess.run(cmd, text=True)
+        have_data = any((HERE / "data" / "linkedin").glob("*.csv"))
+        if proc.returncode != 0 and not have_data:
+            for line in [
+                "",
+                "Could not reach LinkedIn, and there is no cached data to fall back on.",
+                "Nothing was invented — an empty report would be worse than none.",
+                "",
+                "In order, this is what was tried and what would unblock it:",
+                "  - a cached export in data/linkedin/          (nothing there yet)",
+                "  - requesting the export through the browser  (needs you signed in)",
+                "  - reading the invitation manager live        (same)",
+                "  - a HubSpot mirror                           (no export configured)",
+                "",
+                "Re-run this in a terminal you are watching and a browser window will",
+                "open on the LinkedIn sign-in page; sign in once and the rest is",
+                "automatic from then on, including on a schedule.",
+                "",
+                "Or, if the export mail has already landed:",
+                "  python3 linkedin_triage.py --from-archive ~/Downloads/<the>.zip",
+                "",
+                "To see the shape of the report first, with fictional people:",
+                "  python3 linkedin_triage.py --demo",
+            ]:
+                print(line, file=sys.stderr)
+            return 3
         if proc.returncode != 0:
-            print("Ingest could not reach LinkedIn. Grading whatever is already here.",
+            print("Ingest could not refresh. Grading the data already here.",
                   file=sys.stderr)
 
     from ernest import config, grade_run          # noqa: E402

@@ -116,9 +116,28 @@ def _hay(*parts: str) -> str:
     return text
 
 
+# Plain `needle in text` is wrong on this surface and quietly so: 'cro' matched
+# 'a-cro-ss', 'ge ' matched 'messa-ge finds', 'nea' matched 'li-nea-r'. Every one
+# of those promoted a stranger into tier-1 with a confident reason string. Match
+# on token edges instead — hyphens count as edges, so 'google' no longer fires
+# on 'ex-google'.
+_NEEDLE_RE: Dict[str, "re.Pattern[str]"] = {}
+
+
+def _needle(n: str) -> "re.Pattern[str]":
+    pat = _NEEDLE_RE.get(n)
+    if pat is None:
+        core = n.strip().lower()
+        left = r"(?<![a-z0-9-])" if core[:1].isalnum() else ""
+        right = r"(?![a-z0-9-])" if core[-1:].isalnum() else ""
+        pat = re.compile(left + re.escape(core) + right)
+        _NEEDLE_RE[n] = pat
+    return pat
+
+
 def _any_in(text: str, needles: List[str]) -> Optional[str]:
     for n in needles:
-        if n and n.lower() in text:
+        if n and _needle(n).search(text):
             return n
     return None
 
@@ -127,7 +146,7 @@ def _all_in(text: str, needles: List[str]) -> List[str]:
     """Every distinct needle present — for signal density / scoring."""
     seen: List[str] = []
     for n in needles:
-        if n and n.lower() in text and n not in seen:
+        if n and n not in seen and _needle(n).search(text):
             seen.append(n)
     return seen
 
@@ -322,27 +341,33 @@ _DEFAULTS: Dict[str, dict] = {
         # unparseable file degrades to "surface everything for a human" rather
         # than to silent confident answers — and so `ernest doctor` can name
         # which signal family a hand-edit turned off.
-        "crm_tier_map": {"vip": "tier-1", "customer": "tier-1", "investor": "hold",
+        "crm_tier_map": {"vip": "tier-1", "customer": "tier-1", "investor": "tier-1",
                          "partner": "tier-2"},
         "suppression": {"411": {"name": "Suppressed ALL (union)", "route": "hold",
                                 "signal": "Do Not Contact"}},
         "hold": {"press_keywords": ["journalist", "reporter"],
-                 "investor_keywords": ["general partner", "angel investor"],
                  "legal_or_regulatory_keywords": ["general counsel", "regulator"],
                  "competitor_keywords": [],
                  "exec_escalation_keywords": ["spoke with alex"]},
+        "investor": {"current_investors": [], "funds": [],
+                     "titles": ["general partner", "angel investor"],
+                     "fund_words": ["ventures", "capital"]},
+        "partnership": {"keywords": ["partnership", "collaborate"], "brands": []},
         "tier1": {"buyer_archetypes": [], "verticals": [], "platform_buyers": [],
                   "providers": [], "companies": [], "seniority_keywords": [],
                   "function_keywords": [], "intent_keywords": [],
+                  "influencer_keywords": [], "influencer_follower_threshold": 100000,
                   "tier1_countries": [], "min_mutual_connections_signal": 5},
-        "job_seeker": {"keywords": ["open to work", "#opentowork"]},
+        "job_seeker": {"keywords": ["open to work", "#opentowork"],
+                       "strong_background": []},
         "escalation": {"money_keywords": ["refund", "chargeback"],
                        "legal_keywords": ["cease and desist"],
                        "security_keywords": ["data breach"],
                        "churn_keywords": ["cancel our"],
                        "safety_keywords": ["harassment"]},
         "spam": {"vendor_keywords": [], "headline_keywords": [],
-                 "template_fingerprints": [], "dm_blast_keywords": [],
+                 "consultant_keywords": [], "template_fingerprints": [],
+                 "dm_blast_keywords": [],
                  "low_connection_threshold": 50,
                  "threshold": 5.0},   # must equal SPAM_THRESHOLD; tests assert it
         "signal_map": {"tier-1": "Positive", "tier-2": "None", "hold": "Positive",
@@ -431,6 +456,7 @@ LINKEDIN_WEIGHTS = {
 # A sender needs SPAM_THRESHOLD points of independent structural evidence.
 LINKEDIN_SPAM_WEIGHTS = {
     "vendor_phrase": 4.0,      # per distinct cold-vendor phrase in the note
+    "consultant": 4.0,         # per distinct consultant/advisor/coach marker
     "spam_headline": 3.0,      # per distinct spam-headline pattern
     "template_note": 2.0,      # per distinct mass-template fingerprint
     "no_mutuals": 1.5,         # zero mutual connections
@@ -452,6 +478,12 @@ class LinkedInGrade(Grade):
     """
     signal: str = "None"
     action: str = "Review"
+    # One plain sentence a busy human can read without decoding the rubric.
+    # `reasons` is the audit trail; `summary` is what goes on the report.
+    summary: str = ""
+    # WHY this landed where it did, in one word, so the report can say
+    # "3 investors, 5 enterprise buyers" instead of "12 tier-1".
+    lane: str = "other"
 
     @property
     def rank(self) -> int:  # type: ignore[override]
@@ -490,6 +522,7 @@ def grade_linkedin_inbound(
     location: str = "",
     mutual_connections: Optional[int] = None,
     connections: Optional[int] = None,
+    followers: Optional[int] = None,
     crm_tier: str = "",
     suppression_lists: Optional[List[str]] = None,
     prior_contact: bool = False,
@@ -515,33 +548,39 @@ def grade_linkedin_inbound(
         reason = f"On HubSpot list {list_id} ({entry.get('name', 'suppressed')})"
         if route == "accept":
             return LinkedInGrade("tier-1", "high", [reason], flags, CRM_BASE["other"],
-                                 signal=entry.get("signal", "None"), action="Accept")
+                                 signal=entry.get("signal", "None"), action="Accept",
+                                 lane="colleague", summary="On our own team.")
         if route == "drop":
             return LinkedInGrade("trash", "high", [reason], flags, 0.0,
-                                 signal=entry.get("signal", "None"), action="Ignore")
+                                 signal=entry.get("signal", "None"), action="Ignore",
+                                 lane="suppressed", summary="On a do-not-contact list.")
         return LinkedInGrade("hold", "high", [reason], flags, 0.0,
                              signal=entry.get("signal", _signal_for(r, "suppressed")),
-                             action="Hold — suppressed list, decide by hand")
+                             action="Hold — suppressed list, decide by hand",
+                             lane="suppressed", summary="On a suppression list — decide by hand.")
 
     # 2. HOLD — press, investors, legal, competitors, exec references. Never
     #    auto-resolved in either direction. Press is high-stakes here, not trash.
     hold = r.get("hold", {})
-    for key, label, signal, action in (
+    for key, label, signal, action, lane in (
         ("competitor_keywords", "Competitor", "Do Not Contact",
-         "Hold — do not accept unread"),
+         "Hold — do not accept unread", "competitor"),
         ("legal_or_regulatory_keywords", "Legal/regulatory", "Do Not Contact",
-         "Hold — route to legal, never answer from here"),
+         "Hold — route to legal, never answer from here", "legal"),
         ("press_keywords", "Press/journalist", "Positive",
-         "Hold — route to comms, do not ignore"),
-        ("investor_keywords", "Investor", "Positive",
-         "Hold — the CEO decides personally"),
+         "Hold — route to comms, do not ignore", "press"),
         ("exec_escalation_keywords", "Claims a prior conversation with the CEO", "Positive",
-         "Hold — verify the claim before accepting"),
+         "Hold — verify the claim before accepting", "exec-claim"),
     ):
+        # Investors used to live in this loop. They do not any more: the CEO's
+        # definition of tier-1 starts with "current investors and big investors
+        # who may contribute in the future", so an investor is an accept, not a
+        # thing to sit on. Competitors, legal and press still hold.
         hit = _any_in(hay, hold.get(key, []))
         if hit:
             return LinkedInGrade("hold", "medium", [f"{label}: '{hit}'"], flags, 0.0,
-                                 signal=signal, action=action)
+                                 signal=signal, action=action, lane=lane,
+                                 summary=f"{label} — a person decides this one.")
 
     # 3. CRM tier — a known relationship outranks anything inferred from a headline.
     crm_map = {k.lower(): v for k, v in (r.get("crm_tier_map") or {}).items()}
@@ -549,11 +588,76 @@ def grade_linkedin_inbound(
         tier = crm_map[crm_tier.lower()]
         base = CRM_BASE["tier-1"] if tier == "tier-1" else CRM_BASE["other"]
         action = "Accept" if tier in ("tier-1", "tier-2") else "Hold — known relationship"
+        known = {"customer": "Current customer.", "vip": "Current customer (VIP).",
+                 "investor": "Current investor.", "partner": "Existing partner.",
+                 "enterprise": "Enterprise customer.", "strategic": "Strategic account."}
         return LinkedInGrade(tier, "high", [f"CRM tier '{crm_tier}' -> {tier}"], flags, base,
-                             signal=_signal_for(r, tier), action=action)
+                             signal=_signal_for(r, tier), action=action,
+                             lane="investor" if crm_tier.lower() == "investor" else "customer",
+                             summary=known.get(crm_tier.lower(),
+                                               f"Known to us — CRM tier '{crm_tier}'."))
+
+    # 3b. TIER-1 LANES — each decisive on its own, checked before the density
+    #     score. These encode the CEO's own definition of tier-1: money in
+    #     (investors), money out (large buyers), reach (influencers). A general
+    #     partner at a $5B fund has no "buyer archetype" to match, so scoring
+    #     him against the ICP lists is how he ends up in tier-2 with the noise.
+    t1 = r.get("tier1", {})
+    iv = r.get("investor", {})
+    org = company.strip()
+    # The headline and company are the PROFILE — LinkedIn's own fields. The note
+    # is 300 characters the sender chose. Lanes that promote straight to tier-1
+    # read the profile only, so "we build videos for Nvidia" in a cold pitch
+    # cannot buy its way into "decision-maker at a major company".
+    prof = _hay(headline, company)
+
+    def _cap(text: str) -> str:
+        """Sentence case. `.title()` renders 'head of' as 'Head Of'."""
+        text = text.strip()
+        return text[:1].upper() + text[1:] if text else text
+
+    def _t1(reason: str, summary: str, lane: str, conf: str = "high") -> LinkedInGrade:
+        return LinkedInGrade("tier-1", conf, [reason], flags, CRM_BASE["tier-1"],
+                             signal=_signal_for(r, "tier-1"), action="Accept",
+                             summary=summary, lane=lane)
+
+    # (a) Investors. A name on our own cap table is a fact, not an inference.
+    cur_inv = _any_in(prof, iv.get("current_investors", []))
+    if cur_inv:
+        return _t1(f"Current investor: '{cur_inv}'", "Already on our cap table.", "investor")
+    fund = _any_in(prof, iv.get("funds", []))
+    inv_title = _any_in(prof, iv.get("titles", []))
+    if fund and inv_title:
+        return _t1(f"Investor: '{inv_title}' at '{fund}'",
+                   f"Investor — {inv_title} at {org or fund}.", "investor")
+    if fund:
+        return _t1(f"Works at a known fund: '{fund}'",
+                   f"Investor — {org or fund}.", "investor", "medium")
+    if inv_title and _any_in(prof, iv.get("fund_words", [])):
+        return _t1(f"Investor title: '{inv_title}'",
+                   f"Investor — {inv_title}{(' at ' + org) if org else ''}.",
+                   "investor", "medium")
+
+    # (b) Decision-maker at a company big enough to write a real cheque. Title
+    #     alone is not enough and neither is the logo — the pair is the signal.
+    big_co = _any_in(prof, t1.get("companies", []))
+    big_title = _any_in(prof, t1.get("seniority_keywords", []))
+    if big_co and big_title:
+        return _t1(f"Decision-maker at a major company: '{big_title}' at '{big_co}'",
+                   f"{_cap(big_title)} at {org or _cap(big_co)} — enterprise-size buyer.",
+                   "enterprise")
+
+    # (c) Reach. `followers is None` means we never got the number; it is not 0.
+    infl_floor = int(t1.get("influencer_follower_threshold", 100000) or 100000)
+    if followers is not None and followers >= infl_floor:
+        return _t1(f"{followers:,} followers (>= {infl_floor:,})",
+                   f"Large audience — {followers:,} followers.", "influencer")
+    infl = _any_in(prof, t1.get("influencer_keywords", []))
+    if infl and (mutual_connections or 0) >= int(t1.get("min_mutual_connections_signal", 5)):
+        return _t1(f"Public-reach signal: '{infl}'",
+                   f"Creator/influencer — {infl}.", "influencer", "medium")
 
     # 4. TIER-1 SIGNALS — scored by density.
-    t1 = r.get("tier1", {})
     score = 0.0
     reasons: List[str] = []
 
@@ -591,18 +695,51 @@ def grade_linkedin_inbound(
     # A title alone is not a buyer. Tier-1 requires a WHO (archetype/vertical/
     # platform/provider/company) — seniority and country only amplify it.
     structural = bool(archetypes or verticals or platform or provs or comps)
+
+    def _buyer_line(band: str) -> str:
+        """What they are and what they want, in one sentence."""
+        what = (archetypes or verticals or platform or provs or comps or [""])[0]
+        head = f"{_cap(senior[0])} at {org}" if (senior and org) else (
+            _cap(senior[0]) if senior else (org or _cap(what) or "Unidentified"))
+        tail = f" — asking about {intents[0]}" if intents else (
+            f" — {what}" if what and (senior or org) else "")
+        return f"{head}{tail}. {band}"
+
     if structural and (senior or intents or score >= 24.0):
         return LinkedInGrade("tier-1", "high" if (senior and intents) else "medium",
                              reasons, flags, score,
-                             signal=_signal_for(r, "tier-1"), action="Accept")
+                             signal=_signal_for(r, "tier-1"), action="Accept",
+                             lane="buyer", summary=_buyer_line("Fits what we sell."))
 
-    # 5. JOB SEEKER — not a buyer and not spam. Its own lane.
-    js = _any_in(hay, (r.get("job_seeker") or {}).get("keywords", []))
+    # 4b. PARTNERSHIP from a brand we would take a meeting with -> tier-2.
+    pr = r.get("partnership", {})
+    pw = _any_in(hay, pr.get("keywords", []))
+    if pw and (big_co or comps or _any_in(hay, pr.get("brands", []))):
+        return LinkedInGrade("tier-2", "medium", [f"Partnership approach: '{pw}'"], flags,
+                             max(score, 20.0), signal=_signal_for(r, "tier-2"),
+                             action="Review", lane="partnership",
+                             summary=f"Partnership offer{(' from ' + org) if org else ''}.")
+
+    # 5. JOB SEEKER — split on background. A strong candidate is a tier-2 lead
+    #    for the talent lane; someone applying with nothing relevant behind them
+    #    is not a lead at all, and the CEO said so in as many words.
+    js_r = r.get("job_seeker") or {}
+    js = _any_in(hay, js_r.get("keywords", []))
     if js:
-        flags.append("Route to the talent rubric if the profile is strong; otherwise decline politely.")
-        return LinkedInGrade("tier-2", "medium", [f"Job seeker: '{js}'"], flags, 1.0,
-                             signal=_signal_for(r, "job_seeker"),
-                             action="Hold — talent lane, not a buyer")
+        strong = _all_in(hay, js_r.get("strong_background", []))
+        if strong:
+            flags.append("Talent lane — route to whoever owns hiring for this function.")
+            return LinkedInGrade("tier-2", "medium",
+                                 [f"Job seeker: '{js}'",
+                                  f"Strong background: {', '.join(strong[:3])}"], flags, 12.0,
+                                 signal=_signal_for(r, "job_seeker"),
+                                 action="Hold — talent lane, not a buyer", lane="talent",
+                                 summary=f"Possible hire — {strong[0]}.")
+        return LinkedInGrade("trash", "medium",
+                             [f"Job seeker: '{js}'", "No relevant background on the profile"],
+                             flags, 0.0, signal=_signal_for(r, "job_seeker"),
+                             action="Ignore", lane="applicant",
+                             summary="Applying for a job, nothing relevant on the profile.")
 
     # 6. SPAM — scored, never matched on a single phrase. Structural evidence only.
     sp = r.get("spam", {})
@@ -612,6 +749,10 @@ def grade_linkedin_inbound(
     if vendors:
         spam_reasons.append(f"Cold vendor pitch: {', '.join(vendors[:3])}")
         spam_score += LINKEDIN_SPAM_WEIGHTS["vendor_phrase"] * len(vendors)
+    consult = _all_in(hay, sp.get("consultant_keywords", []))
+    if consult:
+        spam_reasons.append(f"Consultant/advisor pitch: {', '.join(consult[:3])}")
+        spam_score += LINKEDIN_SPAM_WEIGHTS["consultant"] * len(consult)
     heads = _all_in(hay, sp.get("headline_keywords", []))
     if heads:
         spam_reasons.append(f"Spam headline pattern: {', '.join(heads[:3])}")
@@ -634,9 +775,15 @@ def grade_linkedin_inbound(
     threshold = float(sp.get("threshold", SPAM_THRESHOLD) or SPAM_THRESHOLD)
     if spam_score >= threshold:
         signal = _signal_for(r, "vendor") if vendors or heads else _signal_for(r, "trash")
+        self_described = " ".join((headline or note).split())[:70]
+        kind = ("Consultant/coach" if (consult and not vendors)
+                else "Selling something" if vendors or heads else "Cold outreach")
         return LinkedInGrade("trash", "high" if spam_score >= threshold * 1.6 else "medium",
                              spam_reasons, flags, spam_score,
-                             signal=signal, action="Ignore")
+                             signal=signal, action="Ignore",
+                             lane="consultant" if (consult and not vendors) else "seller",
+                             summary=f"{kind} — {self_described}." if self_described
+                                     else f"{kind}, no note.")
 
     # 7. DEFAULT — tier-2, low confidence, flagged. Never a silent tier-1 and
     #    never a silent trash: an ambiguous stranger is surfaced, not deleted.
@@ -647,10 +794,13 @@ def grade_linkedin_inbound(
     if reasons:
         flags.append("ICP-adjacent but no decisive buyer signal; verify before upgrading.")
         return LinkedInGrade("tier-2", "medium", reasons, flags, score,
-                             signal=_signal_for(r, "tier-2"), action="Review")
+                             signal=_signal_for(r, "tier-2"), action="Review", lane="buyer",
+                             summary=_buyer_line("Close to what we sell, not decisive."))
     flags.append("No ICP hit and not obvious spam. Unknown stranger — decide by hand or leave pending.")
     return LinkedInGrade("tier-2", "low", ["No decisive signal; defaulting to Tier-2"], flags,
-                         DEFAULT_TIER2_SCORE, signal=_signal_for(r, "tier-2"), action="Review")
+                         DEFAULT_TIER2_SCORE, signal=_signal_for(r, "tier-2"), action="Review",
+                         lane="unknown", summary=(f"{headline.strip()[:70]} — nothing decisive either way."
+                                  if headline.strip() else "No headline, no note, no signal."))
 
 
 # --------------------------------------------------------------------------- #

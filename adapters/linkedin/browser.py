@@ -27,6 +27,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -267,6 +268,9 @@ def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0,
     """
     exe = find_chromium()
     if not exe:
+        # Last resort before giving up on the whole live half of the ladder.
+        exe = download_chromium()
+    if not exe:
         return False
     # Keep the browser profile INSIDE the install, not in the user's home. A tool
     # someone was handed should not leave directories around their machine, and
@@ -310,6 +314,200 @@ def available_drivers(port: int = DEFAULT_CDP_PORT) -> List[str]:
     if shutil.which("ego-browser"):
         found.append("ego")
     return found
+
+
+# --------------------------------------------------------------------------- #
+# Being signed in — the one thing nobody else can do for you
+# --------------------------------------------------------------------------- #
+#
+# Every live rung fails the same way against a signed-out browser: the page
+# renders, the selectors miss, and the ladder reports "the archive page did not
+# behave as expected". That is a true statement and a useless one. Check the
+# session first and say the real thing.
+#
+# Signing in is the ONLY step a person has to take, once, ever. It cannot be
+# automated: it needs the password and whatever second factor the account has.
+# Everything after it — requesting the export, waiting for it, downloading it,
+# unpacking it, grading it, writing the report — runs without anyone present,
+# and the session persists in the profile directory so it is never asked again.
+
+LINKEDIN_FEED = "https://www.linkedin.com/feed/"
+LINKEDIN_LOGIN = "https://www.linkedin.com/login"
+
+_LOGIN_PROBE = r"""
+(() => {
+  const href = location.href || '';
+  if (/\/(login|uas\/login|signup|authwall)/.test(href)) return 'out';
+  if (/\/checkpoint\//.test(href)) return 'checkpoint';
+  if (document.querySelector('input#username, input[name="session_key"]')) return 'out';
+  if (document.querySelector('.global-nav__me, .global-nav__primary-items, nav.global-nav'))
+    return 'in';
+  return 'unknown';
+})()
+"""
+
+
+def login_state(drv: "Driver") -> str:
+    """'in' | 'out' | 'checkpoint' | 'unknown', from the browser's own session."""
+    try:
+        drv.goto(LINKEDIN_FEED)
+        time.sleep(3.0)
+        return str(drv.evaluate(_LOGIN_PROBE) or "unknown")
+    except Exception:                                    # noqa: BLE001
+        return "unknown"
+
+
+def ensure_signed_in(drv: "Driver", *, minutes: float = 10.0,
+                     interactive: Optional[bool] = None) -> bool:
+    """Return True once the browser holds a LinkedIn session.
+
+    Interactive: opens the login page and waits, checking every few seconds, so
+    the caller does not have to be re-run afterwards. Non-interactive (cron,
+    launchd, CI): returns immediately so the ladder falls to the next rung
+    instead of hanging a scheduled job on a login prompt that nobody will see.
+    """
+    state = login_state(drv)
+    if state == "in":
+        return True
+    if interactive is None:
+        interactive = sys.stdin.isatty() and sys.stderr.isatty()
+    if not interactive:
+        return False
+
+    try:
+        drv.goto(LINKEDIN_LOGIN)
+    except Exception:                                    # noqa: BLE001
+        pass
+    if state == "checkpoint":
+        say = "LinkedIn is asking for a verification step in the window that just opened."
+    else:
+        say = "A browser window just opened on the LinkedIn sign-in page."
+    for line in ("", "  " + say,
+                 "  Sign in there. That is the only thing you have to do, once.",
+                 "  Everything after it runs on its own, and the session is remembered.",
+                 f"  Waiting up to {minutes:.0f} minutes...", ""):
+        print(line, file=sys.stderr, flush=True)
+
+    deadline = time.time() + minutes * 60
+    while time.time() < deadline:
+        time.sleep(5.0)
+        try:
+            if str(drv.evaluate(_LOGIN_PROBE) or "") == "in":
+                print("  Signed in. Carrying on.\n", file=sys.stderr, flush=True)
+                return True
+        except Exception:                                # noqa: BLE001
+            continue
+    print("  Still not signed in — falling back to whatever else can answer.\n",
+          file=sys.stderr, flush=True)
+    return False
+
+
+def session_cookie(drv: "Driver", name: str = "li_at") -> str:
+    """The signed-in session cookie, for rungs that run somewhere else.
+
+    A cloud scraper needs this and nothing else. Reading it from the browser the
+    person just signed in to means they never paste a cookie by hand — which is
+    the step every LinkedIn automation guide opens with and the step most people
+    get wrong.
+    """
+    call = getattr(drv, "_call", None)
+    if call is None:
+        return ""      # only the CDP driver can see it; li_at is httpOnly
+    try:
+        got = call("Network.getCookies", urls=["https://www.linkedin.com"])
+        for c in (got.get("result", got).get("cookies") or []):
+            if c.get("name") == name:
+                return str(c.get("value") or "")
+    except Exception:                                    # noqa: BLE001
+        pass
+    return ""
+
+
+# --------------------------------------------------------------------------- #
+# No browser on the machine at all
+# --------------------------------------------------------------------------- #
+#
+# A new Mac has Safari, which cannot be driven this way. Rather than end the
+# ladder with "install Chrome", fetch Chrome for Testing — Google's own
+# automation build, published for exactly this — into the install directory.
+# It is a large download and it says so before starting; it happens once, and
+# deleting the install folder removes it completely.
+
+_CFT_VERSIONS = ("https://googlechromelabs.github.io/chrome-for-testing/"
+                 "last-known-good-versions-with-downloads.json")
+
+
+def _cft_platform() -> str:
+    import platform
+    if sys.platform == "darwin":
+        return "mac-arm64" if platform.machine() in ("arm64", "aarch64") else "mac-x64"
+    if sys.platform.startswith("linux"):
+        return "linux64"
+    if sys.platform.startswith("win"):
+        return "win64"
+    return ""
+
+
+def download_chromium(root: Optional[Path] = None, *, quiet: bool = False) -> Optional[str]:
+    """Fetch Chrome for Testing into the install dir. Returns the binary path.
+
+    Returns None on any failure — the caller falls a rung. This never installs
+    anything system-wide, never touches an existing Chrome, and never writes
+    outside the directory it was handed.
+    """
+    plat = _cft_platform()
+    if not plat:
+        return None
+    root = Path(root or os.environ.get("LI_HOME")
+                or Path(__file__).resolve().parents[2]) / ".chrome"
+    existing = _cft_binary(root)
+    if existing:
+        return existing
+    try:
+        with urllib.request.urlopen(_CFT_VERSIONS, timeout=30) as fh:
+            data = json.loads(fh.read().decode())
+        entry = next(d for d in data["channels"]["Stable"]["downloads"]["chrome"]
+                     if d["platform"] == plat)
+    except Exception:                                    # noqa: BLE001
+        return None
+    if not quiet:
+        print("  No Chrome-family browser on this machine. Downloading Google's\n"
+              "  Chrome for Testing build (~150 MB, once) into the install folder...",
+              file=sys.stderr, flush=True)
+    root.mkdir(parents=True, exist_ok=True)
+    zip_path = root / "chrome.zip"
+    try:
+        urllib.request.urlretrieve(entry["url"], zip_path)
+        import zipfile
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(root)
+    except Exception:                                    # noqa: BLE001
+        return None
+    finally:
+        zip_path.unlink(missing_ok=True)
+    got = _cft_binary(root)
+    if got:
+        # zipfile drops the executable bit; without this the launch fails with a
+        # permission error that looks nothing like its cause.
+        for path in root.rglob("*"):
+            if path.is_file() and path.suffix == "":
+                try:
+                    path.chmod(path.stat().st_mode | 0o111)
+                except OSError:
+                    pass
+        if not quiet:
+            print("  Done.\n", file=sys.stderr, flush=True)
+    return got
+
+
+def _cft_binary(root: Path) -> Optional[str]:
+    if not root.is_dir():
+        return None
+    names = ("Google Chrome for Testing", "chrome", "chrome.exe")
+    for path in root.rglob("*"):
+        if path.is_file() and path.name in names and path.parent.name != "Resources":
+            return str(path)
+    return None
 
 
 def open_driver(prefer: str = "auto", port: int = DEFAULT_CDP_PORT,

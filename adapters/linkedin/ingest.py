@@ -322,6 +322,14 @@ def rung2_archive(li_dir: Path, *, zip_path: Optional[Path], wait_minutes: float
         return parse_archive(zip_path)
     drv = browser.open_driver(prefer)          # raises -> caller falls a rung
     try:
+        # Check the session BEFORE touching the export page. Against a signed-out
+        # browser every selector misses and the rung reports "the archive page
+        # did not behave as expected" — true, and useless. Interactively this
+        # waits for the sign-in; under cron it returns immediately and the ladder
+        # moves on rather than hanging a scheduled job on a prompt nobody sees.
+        if not browser.ensure_signed_in(drv):
+            raise browser.BrowserUnavailable(
+                "not signed in to LinkedIn in this browser profile")
         status = _request_archive(drv)
         if status in ("no-controls", "ticked-no-submit"):
             raise browser.BrowserUnavailable(
@@ -395,6 +403,9 @@ def rung3_live(li_dir: Path, *, limit: int, prefer: str) -> Optional[List[Dict[s
             f"download. Pass --limit {LIVE_READ_CAP} or less to read live anyway.")
     drv = browser.open_driver(prefer)
     try:
+        if not browser.ensure_signed_in(drv):
+            raise browser.BrowserUnavailable(
+                "not signed in to LinkedIn in this browser profile")
         rows: List[Dict[str, str]] = []
         seen: set = set()
         stalled = 0

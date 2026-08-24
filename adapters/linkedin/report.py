@@ -105,6 +105,25 @@ blockquote{margin:9px 0 0;padding:8px 12px;border-left:2px solid var(--line);
   background:var(--panel);border-radius:0 6px 6px 0;color:#3a4148;font-size:12.5px;
   font-style:italic}
 .plain{margin:7px 0 0;font-size:13px;color:#39414a}
+.item .plain{margin:5px 0 0;color:var(--ink);font-size:13.5px}
+.head .num{display:inline-flex;align-items:center;justify-content:center;
+  min-width:20px;height:20px;border-radius:5px;background:var(--panel);
+  border:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:640}
+.action{margin:9px 0 0;font-size:13px;font-weight:620}
+.action::before{content:"→ ";color:var(--muted);font-weight:400}
+.check{margin:5px 0 0;font-size:12px;color:var(--muted)}
+ul{margin:8px 0 0;padding-left:18px}
+li{margin:4px 0;font-size:13.5px}
+li .said{margin:4px 0 0;padding-left:10px;border-left:2px solid var(--line);
+  color:#3a4148;font-size:12.5px;font-style:italic}
+a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(45,74,138,.25)}
+
+/* The TL;DR is the only thing some readers will read. Make it look like it. */
+h2.tldr{font-size:12px;border-bottom:none;margin-bottom:0;color:var(--ink)}
+h2.tldr + ul{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px 14px 32px;margin-top:8px}
+h2.tldr + ul li{margin:6px 0;font-size:14px}
+.item.waiting{border-left-color:var(--blue)}
 code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
   background:var(--panel);padding:1px 5px;border-radius:4px}
 .foot{margin-top:38px;padding-top:14px;border-top:1px solid var(--line);
@@ -119,6 +138,7 @@ code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
 @media(prefers-color-scheme:dark){
   :root{--ink:#e9edf1;--muted:#98a3ae;--line:#2a2f36;--bg:#15181c;--panel:#1b1f25}
   .item{background:#181c21}
+  a{color:#8fb0ee;border-bottom-color:rgba(143,176,238,.3)}
   .note{background:#2a2410;border-color:#584a12;color:#e8d8a0}
   .owner{background:#161f33;border-color:#2a3c60;color:#bacef2}
   blockquote{color:#c6cdd4}
@@ -128,6 +148,9 @@ code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
 
 def _inline(text: str) -> str:
     out = html.escape(text)
+    out = _URL_RE.sub(
+        lambda m: f'<a href="{m.group(1)}">{m.group(1).replace("https://www.linkedin.com/in/", "in/")}</a>',
+        out)
     out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
     out = re.sub(r"`(.+?)`", r"<code>\1</code>", out)
     return out
@@ -145,89 +168,131 @@ _SKIP_PREFIX = ("type:", "source:", "items:", "Full population:",
                 "Report only.", "Reply draft these when")
 
 
-def _render_card(md: str) -> Tuple[str, List[str]]:
-    """One card -> (html, notes). Body only; the page supplies its own chrome.
+# Section heading -> the accent an entry under it should carry. The card names
+# its sections in English ("Accept", "Your call"); the renderer maps those to
+# colour once, here, instead of the card carrying [BADGE] markers for the
+# renderer's benefit. The markdown stays readable on its own, which matters —
+# it is what an agent reads, and half of what a person reads.
+_SECTION_CLASS = (
+    ("answer personally", "escalation"),
+    ("you promised", "escalation"),
+    ("accept", "tier1"),
+    ("your call", "hold"),
+    ("deadlines", "hold"),
+    ("waiting on you", "waiting"),
+    ("longest unanswered", "waiting"),
+    ("talent lane", "identify"),
+    ("worth 30 seconds", "identify"),
+    ("one sequence", "campaign"),
+    ("spam", "bucket"),
+    ("everything else", "bucket"),
+)
 
-    An explicit dl-open flag rather than sniffing the previous fragment: the
-    sniffing version opened a nested <dl> for every field and never closed one,
-    which cascaded into a 48-page PDF where the content was indented off the
-    right edge of the paper.
+_URL_RE = re.compile(r"(?<![\"'>=])(https?://[^\s<)\"]+)")
+
+
+def _section_class(title: str) -> str:
+    low = title.lower()
+    for needle, cls in _SECTION_CLASS:
+        if needle in low:
+            return cls
+    return ""
+
+
+def _render_card(md: str) -> Tuple[str, List[str]]:
+    """One card -> (html, notes).
+
+    A small markdown renderer rather than a library, for the same reason as
+    before: the input is markdown this project emits. It handles exactly what
+    the cards use — h2 sections, a bolded person line, quotes, `Do:`/`Check:`
+    lines, bullets and paragraphs — and nothing else.
     """
     parts: List[str] = []
     item: List[str] = []
+    ul: List[str] = []
     cls = ""
+    section = ""
     in_item = False
-    dl_open = False
 
-    def end_dl() -> None:
-        nonlocal dl_open
-        if dl_open:
-            item.append("</dl>")
-            dl_open = False
+    def flush_ul() -> None:
+        nonlocal ul
+        if ul:
+            target = item if in_item else parts
+            target.append("<ul>" + "".join(f"<li>{x}</li>" for x in ul) + "</ul>")
+            ul = []
 
-    def start_dl() -> None:
-        nonlocal dl_open
-        if not dl_open:
-            item.append("<dl>")
-            dl_open = True
-
-    def close() -> None:
-        nonlocal in_item, item, cls
+    def close_item() -> None:
+        nonlocal in_item, item
+        flush_ul()
         if in_item:
-            end_dl()
             parts.append(f'<div class="item {cls}">' + "".join(item) + "</div>")
-        item, in_item, cls = [], False, ""
+        item, in_item = [], False
 
     for raw in md.splitlines():
         line = raw.rstrip()
+        # The masthead already carries the title and the machine header lines.
         if line.startswith("# ") or any(line.startswith(x) for x in _SKIP_PREFIX):
             continue
-        if line.startswith("> "):
-            close()
-            parts.append(f'<div class="note">{_inline(line[2:])}</div>')
+
+        if line.startswith("## "):
+            close_item()
+            section = line[3:].strip()
+            cls = _section_class(section)
+            anchor = "tldr" if section.lower().startswith("tl;dr") else ""
+            parts.append(f'<h2 class="{anchor}">{_inline(section)}</h2>')
             continue
+
+        if not line.strip():
+            flush_ul()
+            continue
+
+        # A top-level quote is a notice; inside an entry it is what they wrote.
+        if line.startswith("> "):
+            body = _inline(line[2:])
+            if in_item:
+                flush_ul()
+                item.append(f"<blockquote>{body}</blockquote>")
+            else:
+                parts.append(f'<div class="note">{body}</div>')
+            continue
+
         if line.startswith("Reading as:"):
-            close()
+            close_item()
             parts.append(f'<div class="owner">{_inline(line)}</div>')
             continue
 
-        m = re.match(r"^## \d+\.\s*(?:\[([A-Z0-9 -]+)\]\s*)?(.*)$", line)
+        # "**3. Priya Raman — Larkspur Audio**" starts an entry.
+        m = re.match(r"^\*\*(\d+)\.\s+(.*?)\*\*$", line)
         if m:
-            close()
+            close_item()
             in_item = True
-            label = m.group(1) or ""
-            cls = _BADGE_CLASS.get(label, "")
-            badge = _badge(label) if label else ""
-            item.append(f'<div class="head">{badge}'
+            item.append(f'<div class="head"><span class="num">{m.group(1)}</span>'
                         f'<span class="who">{_inline(m.group(2))}</span></div>')
             continue
 
-        if not line:
+        if line.startswith("- ") or line.startswith("* "):
+            ul.append(_inline(line[2:]))
             continue
 
-        if in_item:
-            m = re.match(r"^- ([a-z_]+): (.*)$", line)
-            if m:
-                start_dl()
-                key, val = m.group(1), m.group(2)
-                extra = ' class="action"' if key == "action" else ""
-                item.append(f"<dt>{html.escape(key)}</dt><dd{extra}>{_inline(val)}</dd>")
-                continue
-            if line.startswith("- "):
-                start_dl()
-                item.append(f"<dt></dt><dd>{_inline(line[2:])}</dd>")
-                continue
-            if line.startswith("    ") and line.strip().startswith('"'):
-                end_dl()
-                item.append(f"<blockquote>{_inline(line.strip())}</blockquote>")
-                continue
-            end_dl()
-            item.append(f'<div class="plain">{_inline(line)}</div>')
+        # A quote indented under a bullet belongs to that bullet.
+        if line.startswith("    ") and line.strip().startswith('"'):
+            if ul:
+                ul[-1] += f'<div class="said">{_inline(line.strip())}</div>'
+            else:
+                (item if in_item else parts).append(
+                    f"<blockquote>{_inline(line.strip())}</blockquote>")
             continue
 
-        parts.append(f'<div class="plain">{_inline(line)}</div>')
+        flush_ul()
+        target = item if in_item else parts
+        if line.startswith("Do: "):
+            target.append(f'<div class="action">{_inline(line[4:])}</div>')
+        elif line.startswith("Check: "):
+            target.append(f'<div class="check">{_inline(line[7:])}</div>')
+        else:
+            target.append(f'<div class="plain">{_inline(line)}</div>')
 
-    close()
+    close_item()
     return "\n".join(parts), []
 
 
