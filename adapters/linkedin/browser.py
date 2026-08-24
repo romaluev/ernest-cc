@@ -187,6 +187,27 @@ class ChromeDriver(Driver):
             raise BrowserUnavailable(f"Page JS threw: {res['exceptionDetails'].get('text')}")
         return (res.get("result") or {}).get("value")
 
+    def print_pdf(self, url: str, dest: Path, *, settle: float = 1.5) -> bool:
+        """Print a page to PDF over CDP.
+
+        `--print-to-pdf` hangs indefinitely on some Chromium builds (Brave, in
+        testing, even with onboarding and telemetry disabled). Driving
+        Page.printToPDF over the DevTools socket avoids that path entirely and
+        reuses the client this module already has under test.
+        """
+        self._call("Page.enable")
+        self._call("Page.navigate", url=url)
+        time.sleep(settle)
+        res = self._call("Page.printToPDF", printBackground=True,
+                         preferCSSPageSize=True, marginTop=0.4, marginBottom=0.4,
+                         marginLeft=0.4, marginRight=0.4)
+        data = res.get("data")
+        if not data:
+            return False
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(base64.b64decode(data))
+        return dest.stat().st_size > 0
+
     def close(self) -> None:
         self.ws.close()
 
@@ -234,7 +255,8 @@ def find_chromium() -> Optional[str]:
     return None
 
 
-def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0) -> bool:
+def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0,
+                    headless: bool = False) -> bool:
     """Start a Chromium-family browser with debugging on, and wait for it.
 
     Uses a DEDICATED profile directory, never the user's default. Chrome refuses
@@ -253,11 +275,18 @@ def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0) -> bool
     profile = root / ".browser-profile"
     profile.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.Popen(
-            [exe, f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
-             "--no-first-run", "--no-default-browser-check",
-             "https://www.linkedin.com/feed/"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        args = [exe, f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
+                "--no-first-run", "--no-default-browser-check",
+                "--disable-background-networking", "--disable-component-update",
+                "--disable-sync"]
+        if headless:
+            # A separate profile so a headless print never disturbs a signed-in
+            # session, and never inherits its onboarding state.
+            args[2] = f"--user-data-dir={profile}-headless"
+            args += ["--headless=new", "--disable-gpu", "about:blank"]
+        else:
+            args.append("https://www.linkedin.com/feed/")
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         return False
     deadline = time.time() + wait
@@ -283,8 +312,12 @@ def available_drivers(port: int = DEFAULT_CDP_PORT) -> List[str]:
     return found
 
 
-def open_driver(prefer: str = "auto", port: int = DEFAULT_CDP_PORT) -> Driver:
-    """Best available driver. Raises BrowserUnavailable so callers fall a rung."""
+def open_driver(prefer: str = "auto", port: int = DEFAULT_CDP_PORT,
+                *, autolaunch: bool = True) -> Driver:
+    """Best available driver, starting one if needed.
+
+    Raises BrowserUnavailable so callers fall to the next rung rather than guess.
+    """
     # Chrome FIRST. It is already on the machine and needs no third-party tool,
     # which is the standing constraint here — we adopt other tools' patterns, we
     # do not depend on them. ego-browser is an optional accelerator, used only
@@ -296,4 +329,14 @@ def open_driver(prefer: str = "auto", port: int = DEFAULT_CDP_PORT) -> Driver:
             return EgoDriver() if kind == "ego" else ChromeDriver(port)
         except BrowserUnavailable as exc:
             errors.append(f"{kind}: {exc}")
+    if autolaunch and prefer in ("auto", "chrome") and launch_chromium(port):
+        try:
+            return ChromeDriver(port)
+        except BrowserUnavailable as exc:
+            errors.append(f"autolaunch: {exc}")
+    if not find_chromium():
+        errors.append(
+            "no Chromium-family browser found. Chrome, Edge, Brave, Arc and Chromium "
+            "all work; Safari and Firefox cannot be driven this way. Use LinkedIn's "
+            "data export instead — it needs no browser at all.")
     raise BrowserUnavailable(" | ".join(errors))

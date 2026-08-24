@@ -183,6 +183,9 @@ say "README (human), AGENTS.md (agent), install.sh, cron, engine shim"
 echo
 echo "Verifying the bundle before packaging it..."
 set +e
+# Never write into a real ~/Documents while building.
+VERIFY_REPORTS="$(mktemp -d)"
+export LI_REPORTS_DIR="$VERIFY_REPORTS"
 find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 VERIFY_FAIL=0
 DEMO_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --demo 2>&1 )" || {
@@ -214,11 +217,22 @@ fi
 # in demo mode passes every other check here and is dead on arrival.
 REAL_OUT="$( cd "$STAGE" && python3 linkedin_triage.py --from-archive tests/fixtures/linkedin-archive.zip 2>&1 )"
 for want in invitations messages; do
-  if printf '%s' "$REAL_OUT" | grep -q "reports/.*$want.md"; then
+  if printf '%s' "$REAL_OUT" | grep -q "$want.md"; then
     say "real path produces $want.md"
   else
     echo "  FAIL: the real path (not --demo) produced no $want.md" >&2
     printf '%s\n' "$REAL_OUT" | tail -6 >&2
+    VERIFY_FAIL=1
+  fi
+done
+# The artifacts a person actually opens must all appear.
+for want in report.html report.pdf reply-briefs.md; do
+  if printf '%s' "$REAL_OUT" | grep -q "$want"; then
+    say "real path produces $want"
+  elif [ "$want" = "report.pdf" ]; then
+    say "report.pdf skipped (no browser here) — HTML is the guaranteed artifact"
+  else
+    echo "  FAIL: no $want" >&2
     VERIFY_FAIL=1
   fi
 done
@@ -290,6 +304,8 @@ PYCHK
 rm -rf "$STAGE/reports" "$STAGE/logs" "$STAGE/.demo" "$STAGE/.state" \
        "$STAGE/.browser-profile" "$STAGE/data/linkedin/.ingest.json"
 find "$STAGE" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$VERIFY_REPORTS"
+unset LI_REPORTS_DIR
 set -e
 if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo >&2

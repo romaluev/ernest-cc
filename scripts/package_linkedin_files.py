@@ -43,12 +43,44 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 
 _NICE_NAMES = {"linkedin-invitations": "invitations", "linkedin-dms": "messages"}
+
+
+def reports_root() -> Path:
+    """Where a human will actually go looking.
+
+    Same convention as the /last30days skill: ~/Documents/<Name>, overridable
+    with an env var, created on demand. Burying reports inside the install
+    directory means nobody reads them.
+    """
+    override = os.environ.get("LI_REPORTS_DIR", "").strip()
+    root = Path(override).expanduser() if override else (
+        Path.home() / "Documents" / "LinkedIn-Inbound")
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def find_export() -> Optional[Path]:
+    """The most recent LinkedIn export sitting in the usual places.
+
+    Asking someone to "drop the zip here or tell me where it landed" is asking
+    them to do the one bit of work a computer is good at.
+    """
+    seen = []
+    for folder in (Path.home() / "Downloads", Path.home() / "Desktop", Path.cwd()):
+        if not folder.is_dir():
+            continue
+        for p in folder.glob("*.zip"):
+            name = p.name.lower()
+            if "linkedin" in name or "basic_linkedindataexport" in name or "complete_" in name:
+                seen.append(p)
+    return max(seen, key=lambda p: p.stat().st_mtime) if seen else None
 
 
 def _tidy(written, source_root: Path, dest: Path, *, point_latest: bool = True):
@@ -118,7 +150,7 @@ def main() -> int:
         written = grade_run.run(config.load(), b2b=False, talent=False,
                                 linkedin=True, linkedin_dms=True)
         # A demo must never claim to be the latest real report.
-        for path in _tidy(written, scratch, HERE / "reports" / "demo",
+        for path in _tidy(written, scratch, reports_root() / "demo",
                           point_latest=False):
             print(path)
         print("")
@@ -134,6 +166,13 @@ def main() -> int:
     os.environ.setdefault("ERNEST_MODE", "local")
 
     have_data = any((HERE / "data" / "linkedin").glob("*.csv"))
+    if not have_data and not args.from_archive:
+        found = find_export()
+        if found:
+            print(f"Found a LinkedIn export: {found}", file=sys.stderr)
+            print("Using it. Pass --from-archive to point at a different one.",
+                  file=sys.stderr)
+            args.from_archive = str(found)
     if not have_data and not args.from_archive:
         for line in [
             "No LinkedIn data yet — and this tool does not invent any.",
@@ -171,10 +210,38 @@ def main() -> int:
         print("Nothing to grade. Run the ingest first, or drop a CSV into data/linkedin/.")
         return 3
     stamp = datetime.now().strftime("%Y-%m-%d")
-    for path in _tidy(written, HERE, HERE / "reports" / stamp):
+    dest = reports_root() / stamp
+    out = _tidy(written, HERE, dest)
+    for path in out:
         print(path)
+
+    # Reply briefs for whoever is actually waiting.
+    sys.path.insert(0, str(HERE / "adapters" / "linkedin"))
+    try:
+        import drafts as _drafts                              # noqa: E402
+        from ernest import grade_run as _gr                   # noqa: E402
+        analyzed = _gr.analyze_conversations(cfg)
+        if analyzed:
+            print(_drafts.write_drafts(cfg, analyzed, dest / "reply-briefs.md"))
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"(could not write reply briefs: {exc})", file=sys.stderr)
+
+    # A readable page, and a PDF when a browser is around to print one.
+    try:
+        import report as _report                              # noqa: E402
+        page = _report.render_html(
+            [("Invitations", dest / "invitations.md"),
+             ("Messages", dest / "messages.md")],
+            dest / "report.html")
+        print(page)
+        pdf = _report.render_pdf(page, dest / "report.pdf")
+        if pdf:
+            print(pdf)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"(could not render the HTML report: {exc})", file=sys.stderr)
+
     print("")
-    print("Latest is always: reports/latest/")
+    print(f"Open: {reports_root() / 'latest'}")
     return 0
 
 
