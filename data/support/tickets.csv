@@ -1,0 +1,9 @@
+id,queue,subject,requester,company,priority,status,age_hours,sla_due,last_reply_by
+T-1041,pylon,Render farm quota exceeded mid-campaign,Dana Whitfield,Brightline Creative,high,open,3,2026-06-25T14:00:00Z,customer
+T-1042,pylon,Invoice shows duplicate seat charge — refund?,Lucas Silva,Apex Bank,high,open,9,2026-06-25T10:00:00Z,customer
+T-1043,zendesk,How do I export in 4K?,Maya Ortiz,Solo Creator,low,open,20,2026-06-26T18:00:00Z,agent
+T-1044,zendesk,How do I export in 4K?,Ben Reyes,Indie Studio,low,open,26,2026-06-26T20:00:00Z,customer
+T-1045,pylon,SSO login loops after our IdP change,Priya Nair,Meridian Media,normal,open,6,2026-06-25T16:00:00Z,customer
+T-1046,zendesk,How do I export in 4K?,Chris Lund,Freelance,low,open,44,2026-06-27T09:00:00Z,customer
+T-1047,zendesk,Feature request: batch watermark,Ana Petrov,SmallShop,low,open,70,2026-06-28T12:00:00Z,agent
+T-1048,pylon,Legal: DPA signature page missing,Jordan Lee,Apex Bank,normal,open,12,2026-06-25T18:00:00Z,customer

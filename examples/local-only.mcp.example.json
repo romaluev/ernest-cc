@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "local-memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "${ERNEST_LOCAL_MEMORY_FILE}"
+      }
+    },
+    "gmail": {
+      "type": "http",
+      "url": "https://<your-gmail-mcp-host>/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GMAIL_TOKEN}"
+      }
+    },
+    "hubspot": {
+      "type": "http",
+      "url": "https://<your-hubspot-mcp-host>/mcp",
+      "headers": {
+        "Authorization": "Bearer ${HUBSPOT_TOKEN}"
+      }
+    }
+  },
+  "_note": "Installer writes the real local-only config. Do not ask the CEO to edit this by hand."
+}

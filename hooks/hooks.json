@@ -1,0 +1,39 @@
+{
+  "description": "Ernest: draft-first gate (PreToolUse), learning capture (Stop), and persona/rules load (SessionStart). Used when ernest-cc is installed as a plugin (Cowork / Claude Code). ${CLAUDE_PLUGIN_ROOT} resolves to the plugin's install dir regardless of working directory.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/pre_tool_use.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/capture_learnings.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session_context.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

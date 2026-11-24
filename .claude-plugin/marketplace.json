@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ernest",
+  "description": "Ernest — a draft-first CEO operating clone for Claude Code and Cowork.",
+  "owner": {
+    "name": "Notiky"
+  },
+  "plugins": [
+    {
+      "name": "ernest-cc",
+      "description": "A draft-first CEO operating clone. Watches your inbox/CRM/Slack and reminds you what needs you; drafts replies and outreach only when you ask; never sends without approval. Local-first — your memory stays on your machine.",
+      "author": {
+        "name": "Notiky"
+      },
+      "category": "productivity",
+      "source": "./",
+      "homepage": "https://github.com/romaluev/ernest-cc"
+    }
+  ]
+}

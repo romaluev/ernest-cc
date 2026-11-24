@@ -1,0 +1,17 @@
+{
+  "name": "ernest-cc",
+  "version": "1.2.0",
+  "description": "A draft-first CEO operating clone for Claude Code and Cowork. Watches your inbox/CRM/Slack and reminds you what needs you; drafts replies and outreach only when you ask; never sends without approval. Local-first \u2014 your memory stays on your machine.",
+  "author": {
+    "name": "Notiky"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ceo",
+    "chief-of-staff",
+    "automation",
+    "draft-first",
+    "cowork",
+    "local-first"
+  ]
+}

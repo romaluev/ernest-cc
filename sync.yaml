@@ -1,0 +1,22 @@
+sync:
+  source_of_truth: git
+  package: ernest-cc
+  update_command: "git pull --ff-only && ./install.sh --refresh"
+  surfaces:
+    - claude-code-local
+    - cowork-desktop
+    - vps-brain
+  self_improvement:
+    proposals_log: "logs/learning-proposals.jsonl"
+    proposal_command: "/ernest-learn"
+    adoption: "reviewed-diff-only"
+    max_auto_changes_per_run: 0
+    forbidden_auto_changes:
+      - credentials
+      - external_send_permissions
+      - memory_scope
+      - legal_or_money_authority
+      - unvetted_connectors
+  rollback:
+    method: "git revert or plugin update to previous tag"
+    required_for_every_proposal: true

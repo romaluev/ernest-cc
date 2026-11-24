@@ -1,0 +1,119 @@
+description: |
+  Ernest on Claude Code - native plugin profile. Runs local-only by default and
+  can optionally use a VPS brain as canonical memory/connectors. Draft-first is
+  enforced by hooks.
+
+ernest:
+  runtime: claude-code
+  primary_surface: claude-code
+  executive_surface: cowork
+  remote_brain: optional:ernest-brain
+  source_of_truth: hubspot
+  connector_policy: draft_first
+  local_fallback: true
+
+scope:
+  read:
+    - "**"
+  write:
+    - "memory/**"
+    - "logs/**"
+    - "data/linkedin/**"
+    - "${ERNEST_LOCAL_VAULT}/**"
+    # Default vault paths too, so the agentic watch-card write path works even
+    # when ERNEST_LOCAL_VAULT isn't exported into the Claude/Cowork session env.
+    - "${HOME}/ErnestVault/**"
+    - "~/ErnestVault/**"
+  # deny = absolute (read AND write). Secrets and credential material only.
+  deny:
+    - "**/.env"
+    - "**/env"
+    - "env"
+    - "**/*secret*"
+    - "**/*token*"
+    - "**/*credential*"
+    - "**/private/**"
+    - "**/.mcp.json"
+    - ".mcp.json"
+    - "**/.ssh/**"
+    - "**/.aws/**"
+    - "**/id_rsa*"
+    - "**/id_ed25519*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/*.p12"
+    - "**/*.pfx"
+  # protect = write-deny only (stays readable). Guardrails the self-improvement
+  # loop must never be able to disarm, plus the tamper-evident audit logs.
+  protect:
+    - "ernest/gate.py"
+    - "hooks/**"
+    - "tests/**"
+    - "settings.json"
+    - "ernest.yaml"
+    - "logs/enforcement-audit.log"
+    - "logs/hygiene-audit.log"
+    - "scripts/self-update.sh"
+
+approval_defaults:
+  reads: 0
+  internal_writes: 1
+  external_drafts: 2
+  external_publish: 2
+  connector_install: 2
+  permission_escalation: 3
+  money_or_legal: 3
+
+watchers:
+  mode: remind_only
+  concerns_file: "memory/standing-concerns.md"
+  default_staleness_days: 7
+  card_dir: "${ERNEST_LOCAL_VAULT}/Ernest/00-Watch"
+  card_trigger_phrase: "draft these"
+
+hygiene_policy:
+  job_id: ernest-hubspot-hygiene
+  dry_run: true
+  approved: false
+  mechanical_fields:
+    - company
+    - firstname
+    - lastname
+    - jobtitle
+  propose_only:
+    - translate_company_names
+    - infer_status
+    - infer_priority
+    - fuzzy_dedupe
+    - create_deals
+  snapshot_dir: "${ERNEST_LOCAL_VAULT}/Ernest/Hygiene/snapshots"
+  audit_log: "logs/hygiene-audit.log"
+  active_run_marker: "logs/hygiene-active-run.json"
+
+# LinkedIn inbound. Report-only until a human approves a named batch in chat.
+# Caps live here, not in code, so tuning them is a config change with an audit
+# trail. Accepting and ignoring are reversible; reporting someone as spam is not,
+# and never graduates past L2 no matter how clean the run history looks.
+linkedin_policy:
+  job_id: ernest-linkedin-inbound
+  dry_run: true
+  approved: false
+  # Let `ernest start` walk the ingest ladder when the queue is stale. Off by
+  # default: spawning a browser is not something a report command should begin
+  # doing by surprise. The 07:45 scheduled job refreshes it either way.
+  auto_ingest: false
+  max_named_on_card: 15
+  caps_per_day:
+    accept: 25
+    ignore: 100
+    report_spam: 25
+  min_action_interval_seconds: 20
+  never_auto:
+    - report_spam        # not reversible, and it affects the other account
+    - reply
+    - inmail
+  hold_lists: [411, 400, 412, 413, 414, 485, 484]
+  ingest_max_age_hours: 20
+  audit_log: "logs/linkedin-actions.log"
+  decision_journal: "logs/linkedin-decisions.jsonl"
+  snapshot_dir: "${ERNEST_LOCAL_VAULT}/Ernest/LinkedIn/snapshots"

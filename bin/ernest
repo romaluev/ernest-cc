@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Ernest CLI launcher for working inside the repo / dev checkout.
+# In an installed profile, use the launcher that install.sh writes to
+# $ERNEST_PROFILE_DIR/bin/ernest instead.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m ernest.cli "$@"

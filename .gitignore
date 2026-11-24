@@ -1,0 +1,20 @@
+.env
+*.env
+*.secret*
+*secret*
+*token*
+__pycache__/
+*.pyc
+logs/
+vault/
+.DS_Store
+ErnestVault/
+.ernest-cc/
+docs/_pdf/
+connection.json
+
+# Adapter runtime artifacts (state, downloaded archives, saved flag sets).
+data/linkedin/.ingest.json
+data/linkedin/archive/
+data/*/profiles.json
+dist/

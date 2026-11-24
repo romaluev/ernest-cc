@@ -1,0 +1,542 @@
+"""Browser access for the LinkedIn ingest rungs — ego-browser or plain Chrome.
+
+Two drivers behind one interface so the ladder in `ingest.py` never has to care
+which one is present:
+
+  EgoDriver     shells out to `ego-browser nodejs`. Reuses the user's login
+                state in an isolated agent task space.
+  ChromeDriver  attaches to any Chrome/Chromium already listening on a DevTools
+                port and drives it over CDP. This is the path that matters when
+                the CEO just uses normal Chrome.
+
+RUNS OUTSIDE THE ERNEST GATE, deliberately. `ernest/gate.py:_SHELL_NET_RE`
+blocks any shell command containing an https URL, so a browser heredoc cannot
+run from inside a gated session — and it should not. This module is invoked by
+cron/launchd or by hand; the engine only ever reads the files it writes.
+
+Stdlib only, matching the rest of the engine — no pip, no npm, no vendor SDK.
+The WebSocket client below is hand-rolled for exactly that reason: localhost,
+no TLS, no extensions, no continuation frames beyond what CDP actually sends.
+"""
+from __future__ import annotations
+
+import base64
+import json
+import os
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+DEFAULT_CDP_PORT = 9222
+_TIMEOUT = 30.0
+
+# Anything Chromium-based speaks CDP, so all of these work. Safari and Firefox
+# do NOT — Firefox has its own protocol and Safari has no equivalent at all.
+# Rather than fail with "no browser", we say which ones would work.
+_CHROMIUM_CANDIDATES = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Arc.app/Contents/MacOS/Arc",
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+    "microsoft-edge", "brave-browser",
+)
+UNSUPPORTED_BROWSERS = ("Safari", "Firefox")
+
+
+class BrowserUnavailable(RuntimeError):
+    """No driver could be reached. Callers must fall to the next rung, not guess."""
+
+
+# --------------------------------------------------------------------------- #
+# Minimal CDP-over-WebSocket client
+# --------------------------------------------------------------------------- #
+
+class _WS:
+    """Just enough RFC 6455 to talk to a local DevTools endpoint."""
+
+    def __init__(self, url: str, timeout: float = _TIMEOUT) -> None:
+        if not url.startswith("ws://"):
+            raise BrowserUnavailable(f"Only local ws:// endpoints are supported, got {url!r}")
+        rest = url[len("ws://"):]
+        hostport, _, path = rest.partition("/")
+        host, _, port = hostport.partition(":")
+        self.sock = socket.create_connection((host, int(port or 80)), timeout=timeout)
+        self.sock.settimeout(timeout)
+        key = base64.b64encode(os.urandom(16)).decode()
+        req = (
+            f"GET /{path} HTTP/1.1\r\nHost: {hostport}\r\n"
+            "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        )
+        self.sock.sendall(req.encode())
+        buf = b""
+        while b"\r\n\r\n" not in buf:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise BrowserUnavailable("DevTools closed the connection during handshake")
+            buf += chunk
+        if b" 101 " not in buf.split(b"\r\n", 1)[0]:
+            raise BrowserUnavailable(f"DevTools refused the upgrade: {buf.split(chr(13).encode())[0]!r}")
+        self._tail = buf.split(b"\r\n\r\n", 1)[1]
+
+    def _recv(self, n: int) -> bytes:
+        while len(self._tail) < n:
+            chunk = self.sock.recv(65536)
+            if not chunk:
+                raise BrowserUnavailable("DevTools connection closed mid-frame")
+            self._tail += chunk
+        out, self._tail = self._tail[:n], self._tail[n:]
+        return out
+
+    def send(self, payload: str) -> None:
+        data = payload.encode()
+        header = bytearray([0x81])          # FIN + text
+        mask = os.urandom(4)
+        n = len(data)
+        if n < 126:
+            header.append(0x80 | n)
+        elif n < 1 << 16:
+            header.append(0x80 | 126); header += struct.pack(">H", n)
+        else:
+            header.append(0x80 | 127); header += struct.pack(">Q", n)
+        header += mask
+        self.sock.sendall(bytes(header) + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def recv(self) -> str:
+        while True:
+            b0, b1 = self._recv(2)
+            opcode, length = b0 & 0x0F, b1 & 0x7F
+            if length == 126:
+                length = struct.unpack(">H", self._recv(2))[0]
+            elif length == 127:
+                length = struct.unpack(">Q", self._recv(8))[0]
+            payload = self._recv(length)
+            if b1 & 0x80:  # server frames are never masked, but be tolerant
+                payload = bytes(p ^ payload[i % 4] for i, p in enumerate(payload))
+            if opcode == 0x8:
+                raise BrowserUnavailable("DevTools sent a close frame")
+            if opcode in (0x1, 0x2):
+                return payload.decode("utf-8", "replace")
+            # ping/pong/continuation: keep reading
+
+    def close(self) -> None:
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+@dataclass
+class Driver:
+    kind: str  # "ego" | "chrome"
+
+    def goto(self, url: str) -> None: raise NotImplementedError
+    def evaluate(self, expression: str) -> Any: raise NotImplementedError
+    def close(self) -> None: pass
+
+
+class ChromeDriver(Driver):
+    """Attach to a Chrome already running with --remote-debugging-port."""
+
+    def __init__(self, port: int = DEFAULT_CDP_PORT) -> None:
+        super().__init__(kind="chrome")
+        self.port, self._id = port, 0
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=5) as r:
+                targets = json.loads(r.read().decode())
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            raise BrowserUnavailable(
+                f"No Chrome DevTools endpoint on 127.0.0.1:{port}. Start Chrome with "
+                f"--remote-debugging-port={port} using the CEO's real profile, or install "
+                "ego-browser."
+            ) from exc
+        pages = [t for t in targets if t.get("type") == "page" and t.get("webSocketDebuggerUrl")]
+        if not pages:
+            raise BrowserUnavailable("Chrome is listening but has no attachable page tab open.")
+        # Prefer a tab already on LinkedIn — it is the one carrying the session.
+        pages.sort(key=lambda t: ("linkedin.com" not in (t.get("url") or ""), t.get("url") or ""))
+        self.ws = _WS(pages[0]["webSocketDebuggerUrl"])
+
+    def _call(self, method: str, **params: Any) -> Dict[str, Any]:
+        self._id += 1
+        self.ws.send(json.dumps({"id": self._id, "method": method, "params": params}))
+        while True:
+            msg = json.loads(self.ws.recv())
+            if msg.get("id") == self._id:
+                if "error" in msg:
+                    raise BrowserUnavailable(f"CDP {method} failed: {msg['error']}")
+                return msg.get("result", {})
+
+    def goto(self, url: str) -> None:
+        self._call("Page.enable")
+        self._call("Page.navigate", url=url)
+
+    def evaluate(self, expression: str) -> Any:
+        res = self._call("Runtime.evaluate", expression=expression,
+                         returnByValue=True, awaitPromise=True)
+        if res.get("exceptionDetails"):
+            raise BrowserUnavailable(f"Page JS threw: {res['exceptionDetails'].get('text')}")
+        return (res.get("result") or {}).get("value")
+
+    def print_pdf(self, url: str, dest: Path, *, settle: float = 1.5) -> bool:
+        """Print a page to PDF over CDP.
+
+        `--print-to-pdf` hangs indefinitely on some Chromium builds (Brave, in
+        testing, even with onboarding and telemetry disabled). Driving
+        Page.printToPDF over the DevTools socket avoids that path entirely and
+        reuses the client this module already has under test.
+        """
+        self._call("Page.enable")
+        self._call("Page.navigate", url=url)
+        time.sleep(settle)
+        res = self._call("Page.printToPDF", printBackground=True,
+                         preferCSSPageSize=True, marginTop=0.4, marginBottom=0.4,
+                         marginLeft=0.4, marginRight=0.4)
+        data = res.get("data")
+        if not data:
+            return False
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(base64.b64decode(data))
+        return dest.stat().st_size > 0
+
+    def close(self) -> None:
+        self.ws.close()
+
+
+class EgoDriver(Driver):
+    """Drive ego-browser via its nodejs heredoc runtime."""
+
+    def __init__(self, task: str = "linkedin inbound triage") -> None:
+        super().__init__(kind="ego")
+        if not shutil.which("ego-browser"):
+            raise BrowserUnavailable("ego-browser is not on PATH.")
+        self.task = task
+
+    def _run(self, body: str) -> str:
+        script = (f"const task = await useOrCreateTaskSpace({json.dumps(self.task)});\n{body}\n")
+        proc = subprocess.run(["ego-browser", "nodejs"], input=script, text=True,
+                              capture_output=True, timeout=180)
+        if proc.returncode != 0:
+            raise BrowserUnavailable(f"ego-browser failed: {proc.stderr.strip()[:400]}")
+        return proc.stdout
+
+    def goto(self, url: str) -> None:
+        self._run(f"await openOrReuseTab({json.dumps(url)}, {{ wait: true, timeout: 30 }});")
+
+    def evaluate(self, expression: str) -> Any:
+        out = self._run(f"cliLog(JSON.stringify(await js({json.dumps(expression)})));")
+        for line in reversed(out.strip().splitlines()):
+            try:
+                return json.loads(line.strip())
+            except ValueError:
+                continue
+        return None
+
+
+def find_chromium() -> Optional[str]:
+    """A Chromium-family browser we could start ourselves."""
+    for candidate in _CHROMIUM_CANDIDATES:
+        if candidate.startswith("/"):
+            if Path(candidate).exists():
+                return candidate
+        else:
+            found = shutil.which(candidate)
+            if found:
+                return found
+    return None
+
+
+def launch_chromium(port: int = DEFAULT_CDP_PORT, *, wait: float = 12.0,
+                    headless: bool = False) -> bool:
+    """Start a Chromium-family browser with debugging on, and wait for it.
+
+    Uses a DEDICATED profile directory, never the user's default. Chrome refuses
+    to enable remote debugging on an already-running default profile, and
+    silently attaching to someone's main browser is not a thing to do quietly.
+    The trade-off is stated plainly: a fresh profile is not signed in to
+    LinkedIn, so the user signs in once and it persists.
+    """
+    exe = find_chromium()
+    if not exe:
+        # Last resort before giving up on the whole live half of the ladder.
+        exe = download_chromium()
+    if not exe:
+        return False
+    # Keep the browser profile INSIDE the install, not in the user's home. A tool
+    # someone was handed should not leave directories around their machine, and
+    # deleting the folder must be enough to remove every trace of it.
+    root = Path(os.environ.get("LI_HOME") or Path(__file__).resolve().parents[2])
+    profile = root / ".browser-profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    try:
+        args = [exe, f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
+                "--no-first-run", "--no-default-browser-check",
+                "--disable-background-networking", "--disable-component-update",
+                "--disable-sync"]
+        if headless:
+            # A separate profile so a headless print never disturbs a signed-in
+            # session, and never inherits its onboarding state.
+            args[2] = f"--user-data-dir={profile}-headless"
+            args += ["--headless=new", "--disable-gpu", "about:blank"]
+        else:
+            args.append("https://www.linkedin.com/feed/")
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2):
+                return True
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.5)
+    return False
+
+
+def available_drivers(port: int = DEFAULT_CDP_PORT) -> List[str]:
+    """Which rungs are reachable right now. Used by `ernest doctor`."""
+    found: List[str] = []
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2):
+            found.append("chrome")
+    except (urllib.error.URLError, OSError):
+        pass
+    if shutil.which("ego-browser"):
+        found.append("ego")
+    return found
+
+
+# --------------------------------------------------------------------------- #
+# Being signed in — the one thing nobody else can do for you
+# --------------------------------------------------------------------------- #
+#
+# Every live rung fails the same way against a signed-out browser: the page
+# renders, the selectors miss, and the ladder reports "the archive page did not
+# behave as expected". That is a true statement and a useless one. Check the
+# session first and say the real thing.
+#
+# Signing in is the ONLY step a person has to take, once, ever. It cannot be
+# automated: it needs the password and whatever second factor the account has.
+# Everything after it — requesting the export, waiting for it, downloading it,
+# unpacking it, grading it, writing the report — runs without anyone present,
+# and the session persists in the profile directory so it is never asked again.
+
+LINKEDIN_FEED = "https://www.linkedin.com/feed/"
+LINKEDIN_LOGIN = "https://www.linkedin.com/login"
+
+_LOGIN_PROBE = r"""
+(() => {
+  const href = location.href || '';
+  if (/\/(login|uas\/login|signup|authwall)/.test(href)) return 'out';
+  if (/\/checkpoint\//.test(href)) return 'checkpoint';
+  if (document.querySelector('input#username, input[name="session_key"]')) return 'out';
+  if (document.querySelector('.global-nav__me, .global-nav__primary-items, nav.global-nav'))
+    return 'in';
+  return 'unknown';
+})()
+"""
+
+
+def login_state(drv: "Driver") -> str:
+    """'in' | 'out' | 'checkpoint' | 'unknown', from the browser's own session."""
+    try:
+        drv.goto(LINKEDIN_FEED)
+        time.sleep(3.0)
+        return str(drv.evaluate(_LOGIN_PROBE) or "unknown")
+    except Exception:                                    # noqa: BLE001
+        return "unknown"
+
+
+def ensure_signed_in(drv: "Driver", *, minutes: float = 10.0,
+                     interactive: Optional[bool] = None) -> bool:
+    """Return True once the browser holds a LinkedIn session.
+
+    Waits by default. The earlier version decided by `stdin.isatty()`, which is
+    wrong for the case that matters most: run through an agent, stdin is a pipe,
+    so it never waited and every rung failed with "not signed in" while a browser
+    window sat open on the login page. A scheduled job opts out explicitly with
+    LI_UNATTENDED=1 — that is the caller's decision to make, not something to
+    infer from the shape of a file descriptor.
+    """
+    state = login_state(drv)
+    if state == "in":
+        return True
+    if interactive is None:
+        interactive = os.environ.get("LI_UNATTENDED", "").strip() not in ("1", "true", "yes")
+    if not interactive:
+        return False
+
+    try:
+        drv.goto(LINKEDIN_LOGIN)
+    except Exception:                                    # noqa: BLE001
+        pass
+    if state == "checkpoint":
+        say = "LinkedIn is asking for a verification step in the window that just opened."
+    else:
+        say = "A browser window just opened on the LinkedIn sign-in page."
+    for line in ("", "  " + say,
+                 "  Sign in there. That is the only thing you have to do, once.",
+                 "  Everything after it runs on its own, and the session is remembered.",
+                 f"  Waiting up to {minutes:.0f} minutes...", ""):
+        print(line, file=sys.stderr, flush=True)
+
+    deadline = time.time() + minutes * 60
+    while time.time() < deadline:
+        time.sleep(5.0)
+        try:
+            if str(drv.evaluate(_LOGIN_PROBE) or "") == "in":
+                print("  Signed in. Carrying on.\n", file=sys.stderr, flush=True)
+                return True
+        except Exception:                                # noqa: BLE001
+            continue
+    print("  Still not signed in — falling back to whatever else can answer.\n",
+          file=sys.stderr, flush=True)
+    return False
+
+
+def session_cookie(drv: "Driver", name: str = "li_at") -> str:
+    """The signed-in session cookie, for rungs that run somewhere else.
+
+    A cloud scraper needs this and nothing else. Reading it from the browser the
+    person just signed in to means they never paste a cookie by hand — which is
+    the step every LinkedIn automation guide opens with and the step most people
+    get wrong.
+    """
+    call = getattr(drv, "_call", None)
+    if call is None:
+        return ""      # only the CDP driver can see it; li_at is httpOnly
+    try:
+        got = call("Network.getCookies", urls=["https://www.linkedin.com"])
+        for c in (got.get("result", got).get("cookies") or []):
+            if c.get("name") == name:
+                return str(c.get("value") or "")
+    except Exception:                                    # noqa: BLE001
+        pass
+    return ""
+
+
+# --------------------------------------------------------------------------- #
+# No browser on the machine at all
+# --------------------------------------------------------------------------- #
+#
+# A new Mac has Safari, which cannot be driven this way. Rather than end the
+# ladder with "install Chrome", fetch Chrome for Testing — Google's own
+# automation build, published for exactly this — into the install directory.
+# It is a large download and it says so before starting; it happens once, and
+# deleting the install folder removes it completely.
+
+_CFT_VERSIONS = ("https://googlechromelabs.github.io/chrome-for-testing/"
+                 "last-known-good-versions-with-downloads.json")
+
+
+def _cft_platform() -> str:
+    import platform
+    if sys.platform == "darwin":
+        return "mac-arm64" if platform.machine() in ("arm64", "aarch64") else "mac-x64"
+    if sys.platform.startswith("linux"):
+        return "linux64"
+    if sys.platform.startswith("win"):
+        return "win64"
+    return ""
+
+
+def download_chromium(root: Optional[Path] = None, *, quiet: bool = False) -> Optional[str]:
+    """Fetch Chrome for Testing into the install dir. Returns the binary path.
+
+    Returns None on any failure — the caller falls a rung. This never installs
+    anything system-wide, never touches an existing Chrome, and never writes
+    outside the directory it was handed.
+    """
+    plat = _cft_platform()
+    if not plat:
+        return None
+    root = Path(root or os.environ.get("LI_HOME")
+                or Path(__file__).resolve().parents[2]) / ".chrome"
+    existing = _cft_binary(root)
+    if existing:
+        return existing
+    try:
+        with urllib.request.urlopen(_CFT_VERSIONS, timeout=30) as fh:
+            data = json.loads(fh.read().decode())
+        entry = next(d for d in data["channels"]["Stable"]["downloads"]["chrome"]
+                     if d["platform"] == plat)
+    except Exception:                                    # noqa: BLE001
+        return None
+    if not quiet:
+        print("  No Chrome-family browser on this machine. Downloading Google's\n"
+              "  Chrome for Testing build (~150 MB, once) into the install folder...",
+              file=sys.stderr, flush=True)
+    root.mkdir(parents=True, exist_ok=True)
+    zip_path = root / "chrome.zip"
+    try:
+        urllib.request.urlretrieve(entry["url"], zip_path)
+        import zipfile
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(root)
+    except Exception:                                    # noqa: BLE001
+        return None
+    finally:
+        zip_path.unlink(missing_ok=True)
+    got = _cft_binary(root)
+    if got:
+        # zipfile drops the executable bit; without this the launch fails with a
+        # permission error that looks nothing like its cause.
+        for path in root.rglob("*"):
+            if path.is_file() and path.suffix == "":
+                try:
+                    path.chmod(path.stat().st_mode | 0o111)
+                except OSError:
+                    pass
+        if not quiet:
+            print("  Done.\n", file=sys.stderr, flush=True)
+    return got
+
+
+def _cft_binary(root: Path) -> Optional[str]:
+    if not root.is_dir():
+        return None
+    names = ("Google Chrome for Testing", "chrome", "chrome.exe")
+    for path in root.rglob("*"):
+        if path.is_file() and path.name in names and path.parent.name != "Resources":
+            return str(path)
+    return None
+
+
+def open_driver(prefer: str = "auto", port: int = DEFAULT_CDP_PORT,
+                *, autolaunch: bool = True) -> Driver:
+    """Best available driver, starting one if needed.
+
+    Raises BrowserUnavailable so callers fall to the next rung rather than guess.
+    """
+    # Chrome FIRST. It is already on the machine and needs no third-party tool,
+    # which is the standing constraint here — we adopt other tools' patterns, we
+    # do not depend on them. ego-browser is an optional accelerator, used only
+    # when it happens to be installed and Chrome is not listening.
+    order = {"auto": ("chrome", "ego"), "ego": ("ego",), "chrome": ("chrome",)}[prefer]
+    errors = []
+    for kind in order:
+        try:
+            return EgoDriver() if kind == "ego" else ChromeDriver(port)
+        except BrowserUnavailable as exc:
+            errors.append(f"{kind}: {exc}")
+    if autolaunch and prefer in ("auto", "chrome") and launch_chromium(port):
+        try:
+            return ChromeDriver(port)
+        except BrowserUnavailable as exc:
+            errors.append(f"autolaunch: {exc}")
+    if not find_chromium():
+        errors.append(
+            "no Chromium-family browser found. Chrome, Edge, Brave, Arc and Chromium "
+            "all work; Safari and Firefox cannot be driven this way. Use LinkedIn's "
+            "data export instead — it needs no browser at all.")
+    raise BrowserUnavailable(" | ".join(errors))
